@@ -1,0 +1,31 @@
+{
+  "model_path": "C:\\Users\\ayoub\\OneDrive - Universit\u00e9 Mohammed VI Polytechnique\\Ci1\\Project info\\ML\\data\\results\\hist_gradient_boosting_model.pkl",
+  "model_type": "HistGradientBoostingRegressor",
+  "params": {
+    "learning_rate": 0.1,
+    "max_depth": 3,
+    "max_iter": 200,
+    "min_samples_leaf": 5,
+    "random_state": 0
+  },
+  "feature_cols": [
+    "lag1",
+    "lag2",
+    "lag3",
+    "cons_mean_3y",
+    "cons_trend",
+    "cons_mean_all_past",
+    "qte_installee",
+    "stock_actuel",
+    "stock_securite",
+    "stock_min",
+    "stock_max",
+    "qte_demandee_3ans",
+    "lag1_was_missing",
+    "lag2_was_missing",
+    "lag3_was_missing",
+    "qte_installee_was_missing",
+    "stock_securite_was_missing"
+  ],
+  "dataset": "C:\\Users\\ayoub\\OneDrive - Universit\u00e9 Mohammed VI Polytechnique\\Ci1\\Project info\\ML\\data\\processed\\consumption_panel_dataset.parquet"
+}

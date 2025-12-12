@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.db import models
 
 
@@ -78,3 +79,66 @@ class ActivityLog(models.Model):
     class Meta:
         verbose_name = "Activity Log"
         verbose_name_plural = "Activity Logs"
+
+
+class ParametersConfig(models.Model):
+    """
+    Stores application-wide tuning parameters exposed in the UI.
+    Singleton row (id=1) used for simplicity.
+    """
+
+    id = models.PositiveSmallIntegerField(primary_key=True, default=1, editable=False)
+    rupture_threshold = models.FloatField(default=10)  # percentage
+    long_lead_days = models.PositiveIntegerField(default=60)
+    budget_cap = models.FloatField(null=True, blank=True)
+    auto_select_critical = models.BooleanField(default=True)
+    active_model = models.CharField(max_length=64, default="hist-gradient-boosting")
+    refresh_frequency = models.CharField(
+        max_length=32,
+        default="hebdomadaire",
+        choices=(
+            ("journalier", "journalier"),
+            ("hebdomadaire", "hebdomadaire"),
+            ("mensuel", "mensuel"),
+        ),
+    )
+    notify_rupture = models.BooleanField(default=True)
+    notify_budget = models.BooleanField(default=True)
+    notify_digest = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+    updated_by = models.CharField(max_length=128, default="Système")
+    updated_role = models.CharField(max_length=64, default="Auto")
+
+    class Meta:
+        verbose_name = "Parameters configuration"
+        verbose_name_plural = "Parameters configuration"
+
+
+class UserProfile(models.Model):
+    ROLE_MANAGER = "manager"
+    ROLE_APPROVISIONNEMENT = "approvisionnement"
+    ROLE_LOGISTIQUE = "logistique"
+
+    ROLE_CHOICES = (
+        (ROLE_MANAGER, "Manager"),
+        (ROLE_APPROVISIONNEMENT, "Approvisionnement"),
+        (ROLE_LOGISTIQUE, "Logistique"),
+    )
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")
+    role = models.CharField(max_length=32, choices=ROLE_CHOICES, default=ROLE_MANAGER)
+    nom = models.CharField(max_length=128, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "User profile"
+        verbose_name_plural = "User profiles"
+
+    def to_dict(self):
+        display_name = self.nom or getattr(self.user, "get_full_name", lambda: "")() or getattr(self.user, "username", "")
+        return {
+            "id": str(self.user_id),
+            "nom": display_name,
+            "email": getattr(self.user, "email", "") or "",
+            "role": self.role,
+        }

@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from './ui/card';
 import { Button } from './ui/button';
-import { Maximize2, Minimize2, Download } from 'lucide-react';
-import { toast } from 'sonner@2.0.3';
+import { Maximize2, Minimize2 } from 'lucide-react';
 
 interface InteractiveChartProps {
   title: string;
@@ -16,20 +15,9 @@ export function InteractiveChart({
   title, 
   description, 
   children, 
-  onExport,
   isLoading = false 
 }: InteractiveChartProps) {
   const [isExpanded, setIsExpanded] = useState(false);
-
-  const handleExport = () => {
-    if (onExport) {
-      onExport();
-    } else {
-      toast.success('Graphique exporté!', {
-        description: 'Le graphique a été sauvegardé en PNG.'
-      });
-    }
-  };
 
   return (
     <Card 
@@ -52,14 +40,6 @@ export function InteractiveChart({
           )}
         </div>
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            className="h-8 w-8 p-0"
-            onClick={handleExport}
-          >
-            <Download className="h-4 w-4 text-neutral-500" />
-          </Button>
           <Button
             variant="ghost"
             size="sm"

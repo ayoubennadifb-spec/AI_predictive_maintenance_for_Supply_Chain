@@ -10,29 +10,11 @@ interface SearchResult {
   title: string;
   category: string;
   description: string;
-  url?: string;
 }
 
-const mockResults: SearchResult[] = [
-  {
-    id: '1',
-    title: 'ACC-001',
-    category: 'Pièce',
-    description: 'Accouplement élastique 50mm'
-  },
-  {
-    id: '2',
-    title: 'Prévisions Octobre',
-    category: 'Document',
-    description: 'Rapport de prévisions mensuelles'
-  },
-  {
-    id: '3',
-    title: 'Budget 2025',
-    category: 'Finance',
-    description: 'Allocation budgétaire annuelle'
-  },
-];
+const API_BASE =
+  ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.trim() ||
+  (typeof window !== 'undefined' ? window.location.origin : '');
 
 const recentSearches = ['ACC-001', 'Stock critique', 'Prévisions'];
 
@@ -42,18 +24,40 @@ export function QuickSearch() {
   const [results, setResults] = useState<SearchResult[]>([]);
 
   useEffect(() => {
-    if (query.length > 0) {
-      // Simulated search
-      const filtered = mockResults.filter(r =>
-        r.title.toLowerCase().includes(query.toLowerCase()) ||
-        r.description.toLowerCase().includes(query.toLowerCase())
-      );
-      setResults(filtered);
-      setIsOpen(true);
-    } else {
+    const q = query.trim();
+    if (q.length === 0) {
       setResults([]);
       setIsOpen(false);
+      return;
     }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const url = `${API_BASE}/api/previsions/?search=${encodeURIComponent(q)}&limit=8`;
+        const res = await fetch(url);
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = (await res.json()) as any[];
+        if (cancelled) return;
+        const next: SearchResult[] = (data || []).map((p) => ({
+          id: String(p.code),
+          title: String(p.code),
+          category: 'Pièce',
+          description: String(p.designation || ''),
+        }));
+        setResults(next);
+        setIsOpen(true);
+      } catch {
+        if (cancelled) return;
+        setResults([]);
+        setIsOpen(true);
+      }
+    }, 200);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
   }, [query]);
 
   const getCategoryColor = (category: string) => {
@@ -123,6 +127,11 @@ export function QuickSearch() {
                 <button
                   key={result.id}
                   onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('ocp:navigate', {
+                        detail: { tab: 'previsions', search: result.title },
+                      })
+                    );
                     setQuery('');
                     setIsOpen(false);
                   }}

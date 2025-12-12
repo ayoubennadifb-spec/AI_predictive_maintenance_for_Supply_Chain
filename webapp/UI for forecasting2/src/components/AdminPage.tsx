@@ -34,7 +34,11 @@ type ActivityItem = {
   date: string;
 };
 
-export function AdminPage() {
+type AdminPageProps = {
+  onOpenParameters?: () => void;
+};
+
+export function AdminPage({ onOpenParameters }: AdminPageProps) {
   const [previsions, setPrevisions] = useState<Prevision[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [metrics, setMetrics] = useState<{ precision: number }>({ precision: 0 });
@@ -71,12 +75,13 @@ export function AdminPage() {
 
   const now = useMemo(() => new Date(), []);
 
-  const coverage = useMemo(() => {
-    const totalStock = previsions.reduce((s, p) => s + p.stockActuel, 0);
-    const totalNeed = purchases.reduce((s, p) => s + p.quantite, 0);
-    const ratio = totalStock + totalNeed === 0 ? 0 : (totalStock / (totalStock + totalNeed)) * 100;
+  const availability = useMemo(() => {
+    // Taux de disponibilité = part de la demande (prévision M+1) couverte par le stock actuel
+    const totalDemand = previsions.reduce((s, p) => s + p.previsionM1, 0);
+    const coveredDemand = previsions.reduce((s, p) => s + Math.min(p.stockActuel, p.previsionM1), 0);
+    const ratio = totalDemand === 0 ? 0 : (coveredDemand / totalDemand) * 100;
     return Math.max(0, Math.min(100, ratio));
-  }, [previsions, purchases]);
+  }, [previsions]);
 
   const satisfaction = useMemo(() => {
     const covered = previsions.filter((p) => p.stockActuel >= p.previsionM1).length;
@@ -141,7 +146,7 @@ export function AdminPage() {
 
   const performanceData = useMemo(() => {
     const precision = metrics.precision || 0;
-    const dispo = coverage || 0;
+    const dispo = availability || 0;
     const satisf = satisfaction || 0;
     return [
       { mois: 'M-5', precision, satisfaction: satisf, disponibilite: dispo },
@@ -151,21 +156,19 @@ export function AdminPage() {
       { mois: 'M-1', precision: precision + 0.8, satisfaction: Math.min(100, satisf + 0.5), disponibilite: Math.min(100, dispo + 1) },
       { mois: 'M', precision, satisfaction: satisf, disponibilite: dispo },
     ];
-  }, [metrics, coverage, satisfaction]);
+  }, [metrics, availability, satisfaction]);
 
   const handleSettings = () => {
-    setSettingsOpen((v) => !v);
-    toast.info('Paramètres', { description: settingsOpen ? 'Panneau masqué' : 'Panneau affiché' });
-  };
-
-  const handleExportReport = () => {
-    const apiBase = (import.meta as any).env?.VITE_API_BASE || '';
-    if (apiBase) {
-      window.open(`${apiBase}/api/export/previsions.csv`, '_blank');
-      toast.success('Export admin (prévisions) lancé');
-    } else {
-      toast.info('Backend non configuré');
+    if (onOpenParameters) {
+      onOpenParameters();
+      toast.info('Paramètres', { description: 'Ouverture de la page paramètres.' });
+      return;
     }
+    setSettingsOpen((prev) => {
+      const next = !prev;
+      toast.info('Paramètres', { description: next ? 'Panneau affiché' : 'Panneau masqué' });
+      return next;
+    });
   };
 
   const handleMarkAsRead = (alertId: string) => {
@@ -190,10 +193,6 @@ export function AdminPage() {
             <Button variant="outline" size="sm" className="gap-2" onClick={handleSettings}>
               <Settings className="w-4 h-4" />
               <span className="hidden sm:inline">Paramètres</span>
-            </Button>
-            <Button size="sm" className="gap-2 gradient-ocp hover:opacity-90 shadow-md" onClick={handleExportReport}>
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Rapport</span>
             </Button>
           </>
         }
@@ -224,8 +223,8 @@ export function AdminPage() {
 
         <KPICard
           title="Taux de disponibilité"
-          value={`${coverage.toFixed(1)}%`}
-          subtitle="Stock / (Stock + besoins)"
+          value={`${availability.toFixed(1)}%`}
+          subtitle="Σ min(stock, prévision) / Σ prévision"
           icon={Activity}
           trend={{ value: 0, label: '', isPositive: true }}
         />
@@ -348,27 +347,6 @@ export function AdminPage() {
               </div>
             </Button>
 
-            <Button
-              variant="outline"
-              className="w-full justify-start gap-3 h-auto py-3"
-              onClick={() => {
-                const apiBase = (import.meta as any).env?.VITE_API_BASE || '';
-                if (apiBase) {
-                  window.open(`${apiBase}/api/export/previsions.csv`, '_blank');
-                  toast.success('Export prévisions (backend)');
-                } else {
-                  toast.info('Backend non configuré pour export');
-                }
-              }}
-            >
-              <div className="w-10 h-10 rounded-lg bg-success-500/10 flex items-center justify-center flex-shrink-0">
-                <FileSpreadsheet className="w-5 h-5 text-success-600" />
-              </div>
-              <div className="text-left flex-1">
-                <p className="text-small font-medium text-neutral-900">Exporter données</p>
-                <p className="text-xs text-neutral-500">Rapports et historiques</p>
-              </div>
-            </Button>
           </CardContent>
         </Card>
       </div>

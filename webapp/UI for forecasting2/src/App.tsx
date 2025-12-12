@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { Badge } from './components/ui/badge';
@@ -10,11 +10,13 @@ import { PrevisionsPage } from './components/PrevisionsPage';
 import { SaisieConsommationsPage } from './components/SaisieConsommationsPage';
 import { GestionBudgetPage } from './components/GestionBudgetPage';
 import { AdminPage } from './components/AdminPage';
+import { ParametersPage } from './components/ParametersPage';
 import { LoginPage } from './components/LoginPage';
+import { SignupPage } from './components/SignupPage';
 import { NotificationBadge } from './components/NotificationBadge';
 import { QuickSearch } from './components/QuickSearch';
 import { AuthProvider, useAuth } from './components/AuthContext';
-import { LayoutDashboard, TrendingUp, FileInput, Wallet, Shield, Menu, LogOut, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, FileInput, Wallet, Shield, Menu, LogOut, AlertCircle, Settings } from 'lucide-react';
 import ocpLogo from 'figma:asset/ea0333669458322a030507607d5724be95c62222.png';
 
 // Fonction utilitaire pour obtenir la variante du badge selon le rôle
@@ -48,18 +50,54 @@ function getRoleLabel(role: string): string {
 function AppContent() {
   const [activeTab, setActiveTab] = useState('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [prefillSearch, setPrefillSearch] = useState('');
+  const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const { user, logout, isAuthenticated } = useAuth();
+
+  // Permissions selon le rôle (valeurs sûres même si user est null)
+  const canAccessBudget = user?.role === 'manager';
+  const canAccessAdmin = user?.role === 'manager';
+  const canAccessParameters = user?.role === 'manager';
+  const canAccessSaisie = user?.role === 'logistique' || user?.role === 'manager';
+  const canAccessPrevisions = user?.role === 'approvisionnement' || user?.role === 'manager';
+
+  useEffect(() => {
+    const handler = (event: Event) => {
+      if (!isAuthenticated || !user) return;
+      const detail = (event as CustomEvent).detail as { tab?: string; search?: string } | undefined;
+      if (!detail) return;
+
+      const desiredTab = (detail.tab || 'dashboard').toString();
+      const desiredSearch = (detail.search || '').toString();
+      if (desiredSearch) setPrefillSearch(desiredSearch);
+
+      const isAllowed = (tab: string) => {
+        if (tab === 'previsions') return canAccessPrevisions;
+        if (tab === 'saisie') return canAccessSaisie;
+        if (tab === 'budget') return canAccessBudget;
+        if (tab === 'admin') return canAccessAdmin;
+        if (tab === 'parameters') return canAccessParameters;
+        return tab === 'dashboard';
+      };
+
+      setActiveTab(isAllowed(desiredTab) ? desiredTab : 'dashboard');
+    };
+
+    window.addEventListener('ocp:navigate', handler as EventListener);
+    return () => window.removeEventListener('ocp:navigate', handler as EventListener);
+  }, [isAuthenticated, user, canAccessAdmin, canAccessBudget, canAccessParameters, canAccessPrevisions, canAccessSaisie]);
+
+  useEffect(() => {
+    if (!isAuthenticated) setAuthView('login');
+  }, [isAuthenticated]);
 
   // Si l'utilisateur n'est pas connecté, afficher la page de connexion
   if (!isAuthenticated || !user) {
-    return <LoginPage />;
+    if (authView === 'signup') {
+      return <SignupPage onGoToLogin={() => setAuthView('login')} />;
+    }
+    return <LoginPage onGoToSignup={() => setAuthView('signup')} />;
   }
-
-  // Vérifier les permissions selon le rôle
-  const canAccessBudget = user.role === 'manager';
-  const canAccessAdmin = user.role === 'manager';
-  const canAccessSaisie = user.role === 'logistique' || user.role === 'manager';
-  const canAccessPrevisions = user.role === 'approvisionnement' || user.role === 'manager';
 
   const getTabLabel = (tab: string) => {
     switch (tab) {
@@ -195,6 +233,15 @@ function AppContent() {
                 <span className="text-small">Gestion budget</span>
               </TabsTrigger>
             )}
+            {canAccessParameters && (
+              <TabsTrigger 
+                value="parameters" 
+                className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
+              >
+                <Settings className="w-4 h-4" />
+                <span className="text-small">Paramètres</span>
+              </TabsTrigger>
+            )}
             {canAccessAdmin && (
               <TabsTrigger 
                 value="admin" 
@@ -212,7 +259,7 @@ function AppContent() {
 
           {canAccessPrevisions && (
             <TabsContent value="previsions" className="space-y-4 md:space-y-6">
-              <PrevisionsPage />
+              <PrevisionsPage prefillSearch={prefillSearch} />
             </TabsContent>
           )}
 
@@ -237,9 +284,24 @@ function AppContent() {
             </TabsContent>
           )}
 
+          {canAccessParameters ? (
+            <TabsContent value="parameters" className="space-y-4 md:space-y-6">
+              <ParametersPage onBack={() => setActiveTab('admin')} />
+            </TabsContent>
+          ) : (
+            <TabsContent value="parameters" className="space-y-4 md:space-y-6">
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>
+                  Accès refusé. Seuls les managers peuvent ajuster les paramètres.
+                </AlertDescription>
+              </Alert>
+            </TabsContent>
+          )}
+
           {canAccessAdmin ? (
             <TabsContent value="admin" className="space-y-4 md:space-y-6">
-              <AdminPage />
+              <AdminPage onOpenParameters={canAccessParameters ? () => setActiveTab('parameters') : undefined} />
             </TabsContent>
           ) : (
             <TabsContent value="admin" className="space-y-4 md:space-y-6">
@@ -256,7 +318,7 @@ function AppContent() {
 
       {/* Mobile Bottom Navigation - OCP Styled */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-20 shadow-elevation-4">
-        <div className="grid grid-cols-5 gap-1 px-2 py-1">
+        <div className="grid grid-cols-6 gap-1 px-2 py-1">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
@@ -305,6 +367,19 @@ function AppContent() {
             >
               <Wallet className="w-5 h-5" />
               <span className="text-xs mt-1">Budget</span>
+            </button>
+          )}
+          {canAccessParameters && (
+            <button
+              onClick={() => setActiveTab('parameters')}
+              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
+                activeTab === 'parameters' 
+                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
+                  : 'text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              <Settings className="w-5 h-5" />
+              <span className="text-xs mt-1">Params</span>
             </button>
           )}
           {canAccessAdmin && (

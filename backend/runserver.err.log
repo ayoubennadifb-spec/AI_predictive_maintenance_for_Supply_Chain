@@ -1,0 +1,43 @@
+Watching for file changes with StatReloader
+[12/Dec/2025 20:13:22] "POST /api/auth/login/ HTTP/1.1" 200 107
+[12/Dec/2025 20:13:25] "POST /api/auth/signup/ HTTP/1.1" 201 104
+[12/Dec/2025 20:13:28] "POST /api/auth/login/ HTTP/1.1" 200 104
+[12/Dec/2025 20:13:57] "POST /api/auth/login/ HTTP/1.1" 200 120
+[12/Dec/2025 20:14:00] "POST /api/auth/login/ HTTP/1.1" 200 110
+[12/Dec/2025 20:14:19] "GET / HTTP/1.1" 200 446
+[12/Dec/2025 20:16:58] "GET / HTTP/1.1" 200 446
+[12/Dec/2025 20:16:58] "GET /assets/index-DcwtPNck.css HTTP/1.1" 200 68517
+[12/Dec/2025 20:16:59] "GET /assets/index-xYvNByzp.js HTTP/1.1" 200 975903
+[12/Dec/2025 20:16:59] "GET /assets/ea0333669458322a030507607d5724be95c62222-BTanSs4i.png HTTP/1.1" 200 18719
+[12/Dec/2025 20:16:59] "GET /favicon.ico HTTP/1.1" 204 0
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:18:03] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:18:16] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:18:29] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:18:45] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:19:01] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:19:07] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:19:23] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:19:32] "POST /api/auth/signup/ HTTP/1.1" 409 63
+Conflict: /api/auth/signup/
+[12/Dec/2025 20:23:45] "POST /api/auth/signup/ HTTP/1.1" 409 63
+[12/Dec/2025 20:26:03] "GET / HTTP/1.1" 200 446
+[12/Dec/2025 20:31:44] "POST /api/auth/signup/ HTTP/1.1" 201 113
+[12/Dec/2025 20:31:44] "GET /api/approvals/ HTTP/1.1" 200 1760
+[12/Dec/2025 20:31:44] "GET /api/previsions/ HTTP/1.1" 200 33601
+[12/Dec/2025 20:31:44] "GET /api/purchases/ HTTP/1.1" 200 20130
+[12/Dec/2025 20:31:44] "GET /api/previsions/ HTTP/1.1" 200 33601
+[12/Dec/2025 20:31:44] "GET /api/previsions/ HTTP/1.1" 200 33601
+[12/Dec/2025 20:31:44] "GET /api/consommations/?month=2025-12 HTTP/1.1" 200 7245
+[12/Dec/2025 20:31:44] "GET /api/approvals/ HTTP/1.1" 200 1760
+[12/Dec/2025 20:31:44] "GET /api/purchases/ HTTP/1.1" 200 20130
+[12/Dec/2025 20:31:44] "GET /api/approvals/ HTTP/1.1" 200 1760
+[12/Dec/2025 20:31:45] "GET /api/purchases/ HTTP/1.1" 200 20130
+[12/Dec/2025 20:31:45] "GET /assets/model_metrics-Drx7JYoo.js HTTP/1.1" 200 285

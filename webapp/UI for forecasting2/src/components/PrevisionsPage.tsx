@@ -26,6 +26,7 @@ type Prevision = {
   stockSecurite: number;
   moyenneM3: number;
   previsionM1: number;
+  n_ac_2025: number;
   ecartPourcent: number;
   prixUnitaire: number;
   fournisseur: string;
@@ -33,7 +34,11 @@ type Prevision = {
   historique: { mois: string; qte: number }[];
 };
 
-export function PrevisionsPage() {
+type PrevisionsPageProps = {
+  prefillSearch?: string;
+};
+
+export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
   const { user } = useAuth();
   const isManager = user?.role === 'manager';
 
@@ -47,14 +52,16 @@ export function PrevisionsPage() {
   const [selectedFournisseur, setSelectedFournisseur] = useState('tous');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedPrevision, setSelectedPrevision] = useState<Prevision | null>(null);
-  const [approvedCodes, setApprovedCodes] = useState<Set<string>>(new Set());
+
+  useEffect(() => {
+    const next = (prefillSearch || '').trim();
+    if (next && next !== searchQuery) setSearchQuery(next);
+  }, [prefillSearch, searchQuery]);
 
   useEffect(() => {
     loadPrevisions()
       .then((items) => {
         setPrevisions(items as any);
-        const approved = new Set(items.filter((p: any) => p.approved).map((p: any) => p.code));
-        setApprovedCodes(approved);
       })
       .catch(() => setError("Erreur de chargement des prévisions"))
       .finally(() => setLoading(false));
@@ -77,9 +84,9 @@ export function PrevisionsPage() {
   });
 
   const nbPieces = filteredPrevisions.length;
-  const qteTotale = filteredPrevisions.reduce((sum, p) => sum + p.previsionM1, 0);
+  const qteTotale = filteredPrevisions.reduce((sum, p) => sum + (p.n_ac_2025 ?? p.previsionM1), 0);
   const budgetTotal = isManager
-    ? filteredPrevisions.reduce((sum, p) => sum + p.previsionM1 * p.prixUnitaire, 0)
+    ? filteredPrevisions.reduce((sum, p) => sum + (p.n_ac_2025 ?? p.previsionM1) * p.prixUnitaire, 0)
     : 0;
   const piecesUrgentes = filteredPrevisions.filter((p) => p.criticite === 'urgent').length;
   const hasFilters =
@@ -133,25 +140,6 @@ export function PrevisionsPage() {
     toast.success('Fichier exporté', { description: `${filteredPrevisions.length} lignes exportées.` });
   };
 
-  const handleApprove = () => {
-    const codes = filteredPrevisions.map((p) => p.code);
-    const next = new Set(approvedCodes);
-    filteredPrevisions.forEach((p) => next.add(p.code));
-    setApprovedCodes(next);
-      const apiBase = (import.meta as any).env?.VITE_API_BASE || '';
-      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-      if (user) {
-        headers['X-USER'] = user.nom;
-        headers['X-ROLE'] = user.role;
-      }
-      fetch(`${apiBase}/api/approvals/`, {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ codes }),
-      }).catch(() => {});
-    toast.success('Prévisions approuvées', { description: `${filteredPrevisions.length} prévisions validées.` });
-  };
-
   const handleResetFilters = () => {
     setSelectedType('tous');
     setSelectedCriticite('tous');
@@ -176,20 +164,6 @@ export function PrevisionsPage() {
           { label: 'Accueil', href: '#' },
           { label: 'Prévisions' },
         ]}
-        actions={
-          <>
-            <Button variant="outline" size="sm" className="gap-2 hover:bg-ocp-green/5" onClick={handleExportExcel}>
-              <Download className="w-4 h-4" />
-              <span className="hidden sm:inline">Export Excel</span>
-              <span className="sm:hidden">Export</span>
-            </Button>
-            <Button size="sm" className="gap-2 gradient-ocp" onClick={handleApprove}>
-              <Check className="w-4 h-4" />
-              <span className="hidden sm:inline">Approuver les prévisions</span>
-              <span className="sm:hidden">Approuver</span>
-            </Button>
-          </>
-        }
       />
 
       <StatsBanner
@@ -213,16 +187,6 @@ export function PrevisionsPage() {
             icon: <AlertCircle className="w-4 h-4 text-danger-500" />,
           },
         ]}
-        actions={
-          <>
-            <Button variant="outline" size="sm" className="hover:bg-ocp-green/5" onClick={handleExportExcel}>
-              Export
-            </Button>
-            <Button size="sm" className="gradient-ocp hover:opacity-90 shadow-md" onClick={handleApprove}>
-              Approuver ({nbPieces})
-            </Button>
-          </>
-        }
       />
 
       <Card className="shadow-sm border-neutral-200">
@@ -372,11 +336,6 @@ export function PrevisionsPage() {
                       <TableCell className="font-medium text-neutral-900 sticky left-0 bg-white group-hover:bg-neutral-50">
                         <div className="flex items-center gap-2">
                           <span>{prev.code}</span>
-                          {approvedCodes.has(prev.code) && (
-                            <Badge variant="secondary" className="bg-success-50 text-success-700 border-success-200">
-                              Approuvé
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell className="text-small text-neutral-700">{prev.designation}</TableCell>
