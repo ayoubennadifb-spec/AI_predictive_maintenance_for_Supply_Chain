@@ -35,6 +35,25 @@ def error_response(message: str, status: int = 400, code: str | None = None, det
     return JsonResponse(payload, status=status)
 
 
+def ensure_manager(request):
+    """
+    Helper for manager-only admin APIs.
+
+    - Enforces API token via check_api_auth
+    - Enforces X-Role == manager (UserProfile.ROLE_MANAGER)
+
+    Returns ((user, role), None) on success, or (None, JsonResponse) on failure.
+    """
+    if not check_api_auth(request):
+        return None, error_response("Unauthorized", status=403, code="unauthorized")
+
+    user, role = requester_identity(request)
+    if role != UserProfile.ROLE_MANAGER:
+        return None, error_response("Accès réservé aux managers", status=403, code="forbidden")
+
+    return (user, role), None
+
+
 # ---------------------------------------------------------------------------
 # Prévisions & achats
 # ---------------------------------------------------------------------------
@@ -875,6 +894,578 @@ def recompute_previsions(request):
     )
 
     return JsonResponse({"updated": updated, "created": created})
+
+
+# ---------------------------------------------------------------------------
+# Admin JSON API (manager-only) - React administration
+# ---------------------------------------------------------------------------
+
+
+def _serialize_part_admin(part: Part) -> dict:
+    return {
+        "code": part.code,
+        "designation": part.designation,
+        "criticite": part.criticite,
+        "stock_actuel": float(part.stock_actuel or 0.0),
+        "stock_securite": float(part.stock_securite or 0.0),
+        "moyenne_m3": float(part.moyenne_m3 or 0.0),
+        "prevision_m1": float(part.prevision_m1 or 0.0),
+        "ecart_pourcent": float(part.ecart_pourcent or 0.0),
+        "prix_unitaire": float(part.prix_unitaire or 0.0),
+        "fournisseur": part.fournisseur,
+        "delai": float(part.delai or 0.0),
+        "n_ac_2025": float(part.n_ac_2025 or 0.0),
+        "approuve": bool(part.approuve),
+    }
+
+
+def _serialize_consumption_admin(obj: Consumption) -> dict:
+    return {
+        "id": obj.id,
+        "part_code": obj.part.code,
+        "date": obj.date.isoformat(),
+        "valeur": float(obj.valeur or 0.0),
+        "created_at": obj.created_at.isoformat(),
+    }
+
+
+def _serialize_user_admin(profile: UserProfile) -> dict:
+    user = profile.user
+    display_name = profile.nom or getattr(user, "get_full_name", lambda: "")() or getattr(user, "username", "")
+    return {
+        "id": int(getattr(user, "pk", 0)),
+        "username": getattr(user, "username", ""),
+        "email": getattr(user, "email", "") or "",
+        "nom": display_name,
+        "role": profile.role,
+        "created_at": profile.created_at.isoformat(),
+    }
+
+
+def _parse_float(value, default: float = 0.0) -> float:
+    if value is None or value == "":
+        return default
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        raise ValueError
+
+
+def _recompute_part_nac(part: Part) -> tuple[float, float]:
+    """
+    Helper to recompute n_ac_2025 after a stock change.
+    Mirrors the logic used in consumptions/import views.
+    """
+    # IMPORTANT: prevision_m1 can legitimately be 0.0 (valid ML prediction) -> do not use `or`.
+    n_pm = float(part.prevision_m1) if part.prevision_m1 is not None else float(part.moyenne_m3 or 0.0)
+    delai_mois = max(0.0, (part.delai or 0.0) / 30.0)
+    n_ac = max(0.0, n_pm + (part.stock_securite or 0.0) - (part.stock_actuel or 0.0) + n_pm * delai_mois)
+    part.n_ac_2025 = n_ac
+    part.save(update_fields=["n_ac_2025"])
+    return n_pm, n_ac
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def admin_parts(request):
+    ensure_parts_loaded()
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    user, role = identity
+
+    if request.method == "GET":
+        qs = Part.objects.all().order_by("code")
+
+        search = request.GET.get("search")
+        criticite = request.GET.get("criticite")
+
+        if search:
+            s = search.strip()
+            if s:
+                qs = qs.filter(
+                    Q(code__icontains=s)
+                    | Q(designation__icontains=s)
+                    | Q(fournisseur__icontains=s)
+                )
+
+        if criticite:
+            qs = qs.filter(criticite__iexact=criticite.strip())
+
+        total = qs.count()
+        limit = request.GET.get("limit")
+        offset = request.GET.get("offset")
+        try:
+            if offset is not None:
+                qs = qs[int(offset) :]
+            if limit is not None:
+                qs = qs[: int(limit)]
+        except (TypeError, ValueError):
+            # ignore bad pagination parameters
+            pass
+
+        data = [_serialize_part_admin(p) for p in qs]
+        return JsonResponse({"results": data, "count": total})
+
+    # POST -> create a new Part
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    code = str(payload.get("code") or "").strip()
+    if not code:
+        return error_response("code is required", status=400, code="missing_code")
+
+    try:
+        part = Part.objects.create(
+            code=code,
+            designation=str(payload.get("designation") or ""),
+            criticite=str(payload.get("criticite") or "normal"),
+            stock_actuel=_parse_float(payload.get("stock_actuel"), 0.0),
+            stock_securite=_parse_float(payload.get("stock_securite"), 0.0),
+            moyenne_m3=_parse_float(payload.get("moyenne_m3"), 0.0),
+            prevision_m1=_parse_float(payload.get("prevision_m1"), 0.0),
+            ecart_pourcent=_parse_float(payload.get("ecart_pourcent"), 0.0),
+            prix_unitaire=_parse_float(payload.get("prix_unitaire"), 0.0),
+            fournisseur=str(payload.get("fournisseur") or ""),
+            delai=_parse_float(payload.get("delai"), 0.0),
+            n_ac_2025=_parse_float(payload.get("n_ac_2025"), 0.0),
+            approuve=bool(payload.get("approuve", False)),
+        )
+    except ValueError:
+        return error_response("Invalid numeric value", status=400, code="invalid_number")
+    except IntegrityError:
+        return error_response("Part already exists", status=409, code="part_exists")
+
+    log_activity(
+        action=f"Pièce créée ({part.code})",
+        module="Admin",
+        utilisateur=user,
+        role=role,
+    )
+    return JsonResponse(_serialize_part_admin(part), status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "PATCH", "DELETE"])
+def admin_part_detail(request, code: str):
+    ensure_parts_loaded()
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    user, role = identity
+
+    part = Part.objects.filter(code=code).first()
+    if not part:
+        return error_response("Part not found", status=404, code="not_found")
+
+    if request.method == "GET":
+        return JsonResponse(_serialize_part_admin(part))
+
+    if request.method == "DELETE":
+        part.delete()
+        log_activity(
+            action=f"Pièce supprimée ({code})",
+            module="Admin",
+            utilisateur=user,
+            role=role,
+        )
+        return JsonResponse({"ok": True})
+
+    # PUT/PATCH -> update
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    fields_to_update: list[str] = []
+
+    def set_num(field: str):
+        if field in payload:
+            try:
+                value = _parse_float(payload.get(field))
+            except ValueError:
+                raise ValueError(field)
+            setattr(part, field, value)
+            fields_to_update.append(field)
+
+    def set_str(field: str):
+        if field in payload:
+            setattr(part, field, str(payload.get(field) or ""))
+            fields_to_update.append(field)
+
+    try:
+        set_str("designation")
+        set_str("criticite")
+        set_str("fournisseur")
+        set_num("stock_actuel")
+        set_num("stock_securite")
+        set_num("moyenne_m3")
+        set_num("prevision_m1")
+        set_num("ecart_pourcent")
+        set_num("prix_unitaire")
+        set_num("delai")
+        set_num("n_ac_2025")
+    except ValueError as exc:
+        field = str(exc) if str(exc) else "field"
+        return error_response(f"Invalid numeric value for {field}", status=400, code="invalid_number")
+
+    if "approuve" in payload:
+        part.approuve = bool(payload.get("approuve"))
+        fields_to_update.append("approuve")
+
+    if fields_to_update:
+        part.save(update_fields=fields_to_update)
+
+    log_activity(
+        action=f"Pièce mise à jour ({part.code})",
+        module="Admin",
+        utilisateur=user,
+        role=role,
+    )
+    return JsonResponse(_serialize_part_admin(part))
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def admin_consumptions(request):
+    ensure_parts_loaded()
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    user, role = identity
+
+    if request.method == "GET":
+        qs = Consumption.objects.select_related("part").all().order_by("-date", "part__code")
+
+        code = request.GET.get("code")
+        if code:
+            qs = qs.filter(part__code__icontains=code.strip())
+
+        from_param = request.GET.get("from")
+        to_param = request.GET.get("to")
+
+        if from_param:
+            try:
+                d_from = dt_date.fromisoformat(from_param)
+                qs = qs.filter(date__gte=d_from)
+            except ValueError:
+                pass
+
+        if to_param:
+            try:
+                d_to = dt_date.fromisoformat(to_param)
+                qs = qs.filter(date__lte=d_to)
+            except ValueError:
+                pass
+
+        total = qs.count()
+        limit = request.GET.get("limit")
+        offset = request.GET.get("offset")
+        try:
+            if offset is not None:
+                qs = qs[int(offset) :]
+            if limit is not None:
+                qs = qs[: int(limit)]
+        except (TypeError, ValueError):
+            pass
+
+        data = [_serialize_consumption_admin(c) for c in qs]
+        return JsonResponse({"results": data, "count": total})
+
+    # POST -> create / upsert
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    code = str(payload.get("code") or "").strip()
+    date_value = payload.get("date")
+    valeur = payload.get("valeur")
+
+    if not code or not date_value or valeur is None:
+        return error_response("code, date and valeur are required", status=400, code="missing_fields")
+
+    part = Part.objects.filter(code=code).first()
+    if not part:
+        return error_response("Unknown part", status=404, code="unknown_part")
+
+    try:
+        parsed_date = dt_date.fromisoformat(str(date_value))
+    except Exception:
+        return error_response("Invalid date", status=400, code="invalid_date")
+
+    try:
+        val = _parse_float(valeur, 0.0)
+    except ValueError:
+        return error_response("Invalid valeur", status=400, code="invalid_number")
+
+    if val < 0:
+        return error_response("valeur must be >= 0", status=400, code="invalid_number")
+
+    obj, created = Consumption.objects.update_or_create(
+        part=part,
+        date=parsed_date,
+        defaults={"valeur": val},
+    )
+
+    part.stock_actuel = max(0.0, val)
+    part.save(update_fields=["stock_actuel"])
+    _recompute_part_nac(part)
+
+    log_activity(
+        action=f"Consommation {'créée' if created else 'mise à jour'} ({part.code} {parsed_date.isoformat()})",
+        module="Admin",
+        utilisateur=user,
+        role=role,
+    )
+    status_code = 201 if created else 200
+    return JsonResponse(_serialize_consumption_admin(obj), status=status_code)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "PATCH", "DELETE"])
+def admin_consumption_detail(request, pk: int):
+    ensure_parts_loaded()
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    user, role = identity
+
+    obj = Consumption.objects.select_related("part").filter(pk=pk).first()
+    if not obj:
+        return error_response("Consumption not found", status=404, code="not_found")
+
+    part = obj.part
+
+    if request.method == "GET":
+        return JsonResponse(_serialize_consumption_admin(obj))
+
+    if request.method == "DELETE":
+        code = part.code
+        date_str = obj.date.isoformat()
+        obj.delete()
+        part.stock_actuel = 0.0
+        part.save(update_fields=["stock_actuel"])
+        _recompute_part_nac(part)
+        log_activity(
+            action=f"Consommation supprimée ({code} {date_str})",
+            module="Admin",
+            utilisateur=user,
+            role=role,
+        )
+        return JsonResponse({"ok": True})
+
+    # PUT/PATCH -> update valeur/date
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    updated = False
+
+    if "date" in payload:
+        try:
+            new_date = dt_date.fromisoformat(str(payload.get("date")))
+            obj.date = new_date
+            updated = True
+        except Exception:
+            return error_response("Invalid date", status=400, code="invalid_date")
+
+    if "valeur" in payload:
+        try:
+            val = _parse_float(payload.get("valeur"), 0.0)
+        except ValueError:
+            return error_response("Invalid valeur", status=400, code="invalid_number")
+        if val < 0:
+            return error_response("valeur must be >= 0", status=400, code="invalid_number")
+        obj.valeur = val
+        part.stock_actuel = max(0.0, val)
+        part.save(update_fields=["stock_actuel"])
+        _recompute_part_nac(part)
+        updated = True
+
+    if updated:
+        obj.save(update_fields=["date", "valeur"])
+        log_activity(
+            action=f"Consommation mise à jour ({part.code} {obj.date.isoformat()})",
+            module="Admin",
+            utilisateur=user,
+            role=role,
+        )
+
+    return JsonResponse(_serialize_consumption_admin(obj))
+
+
+@csrf_exempt
+@require_http_methods(["GET", "POST"])
+def admin_users(request):
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    user, role = identity
+
+    if request.method == "GET":
+        qs = UserProfile.objects.select_related("user").all().order_by("-created_at")
+
+        search = request.GET.get("search")
+        if search:
+            s = search.strip()
+            if s:
+                qs = qs.filter(
+                    Q(user__username__icontains=s)
+                    | Q(user__email__icontains=s)
+                    | Q(nom__icontains=s)
+                )
+
+        total = qs.count()
+        limit = request.GET.get("limit")
+        offset = request.GET.get("offset")
+        try:
+            if offset is not None:
+                qs = qs[int(offset) :]
+            if limit is not None:
+                qs = qs[: int(limit)]
+        except (TypeError, ValueError):
+            pass
+
+        data = [_serialize_user_admin(p) for p in qs]
+        return JsonResponse({"results": data, "count": total})
+
+    # POST -> create user
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    username = str(payload.get("username") or "").strip()
+    password = str(payload.get("password") or "")
+    email = str(payload.get("email") or "").strip()
+    nom = str(payload.get("nom") or "").strip()
+    role_raw = payload.get("role")
+
+    from_role = _normalize_role(str(role_raw) if role_raw is not None else None)
+    if not username or not from_role:
+        return error_response("username and role are required", status=400, code="missing_fields")
+
+    if password and len(password) < 4:
+        return error_response("Password too short", status=400, code="password_too_short")
+
+    User = get_user_model()
+    if User.objects.filter(username__iexact=username).exists():
+        return error_response("Username already exists", status=409, code="username_exists")
+
+    try:
+        user_obj = User.objects.create_user(username=username, email=email or None, password=password or None)
+        if nom:
+            try:
+                user_obj.first_name = nom
+                user_obj.save(update_fields=["first_name"])
+            except Exception:
+                pass
+        profile = UserProfile.objects.create(user=user_obj, role=from_role, nom=nom)
+    except Exception as exc:
+        return error_response("Signup failed", status=500, code="signup_failed", details=str(exc))
+
+    log_activity(
+        action=f"Utilisateur créé ({username})",
+        module="Admin",
+        utilisateur=user,
+        role=role,
+    )
+    return JsonResponse(_serialize_user_admin(profile), status=201)
+
+
+@csrf_exempt
+@require_http_methods(["GET", "PUT", "PATCH", "DELETE"])
+def admin_user_detail(request, pk: int):
+    identity, error = ensure_manager(request)
+    if error:
+        return error
+    actor, actor_role = identity
+
+    profile = UserProfile.objects.select_related("user").filter(user_id=pk).first()
+    if not profile:
+        return error_response("User not found", status=404, code="not_found")
+
+    user = profile.user
+
+    if request.method == "GET":
+        return JsonResponse(_serialize_user_admin(profile))
+
+    if request.method == "DELETE":
+        username = user.username
+        profile.delete()
+        user.delete()
+        log_activity(
+            action=f"Utilisateur supprimé ({username})",
+            module="Admin",
+            utilisateur=actor,
+            role=actor_role,
+        )
+        return JsonResponse({"ok": True})
+
+    # PUT/PATCH -> update user/profile
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    fields_user: list[str] = []
+    fields_profile: list[str] = []
+
+    if "username" in payload:
+        new_username = str(payload.get("username") or "").strip()
+        if new_username and new_username.lower() != user.username.lower():
+            User = get_user_model()
+            if User.objects.filter(username__iexact=new_username).exclude(pk=user.pk).exists():
+                return error_response("Username already exists", status=409, code="username_exists")
+            user.username = new_username
+            fields_user.append("username")
+
+    if "email" in payload:
+        user.email = str(payload.get("email") or "").strip()
+        fields_user.append("email")
+
+    if "nom" in payload:
+        profile.nom = str(payload.get("nom") or "").strip()
+        fields_profile.append("nom")
+        try:
+            user.first_name = profile.nom
+            fields_user.append("first_name")
+        except Exception:
+            pass
+
+    if "role" in payload:
+        role_raw = payload.get("role")
+        normalized = _normalize_role(str(role_raw) if role_raw is not None else None)
+        if not normalized:
+            return error_response("Invalid role", status=400, code="invalid_role")
+        profile.role = normalized
+        fields_profile.append("role")
+
+    if "password" in payload:
+        password = str(payload.get("password") or "")
+        if password:
+            if len(password) < 4:
+                return error_response("Password too short", status=400, code="password_too_short")
+            user.set_password(password)
+            fields_user.append("password")
+
+    if fields_user:
+        user.save(update_fields=list(set(fields_user)))
+    if fields_profile:
+        profile.save(update_fields=list(set(fields_profile)))
+
+    log_activity(
+        action=f"Utilisateur mis à jour ({user.username})",
+        module="Admin",
+        utilisateur=actor,
+        role=actor_role,
+    )
+
+    return JsonResponse(_serialize_user_admin(profile))
 
 
 # ---------------------------------------------------------------------------

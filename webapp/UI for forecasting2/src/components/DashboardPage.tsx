@@ -6,8 +6,6 @@ import { toast } from "sonner@2.0.3";
 import { useAuth } from "./AuthContext";
 import { KPICard } from "./KPICard";
 import { InteractiveChart } from "./InteractiveChart";
-import { LiveStatsWidget } from "./LiveStatsWidget";
-import { ActivityFeed } from "./ActivityFeed";
 import { CriticalityBadge } from "./CriticalityBadge";
 import { PageHeader } from "./PageHeader";
 import { Button } from "./ui/button";
@@ -16,7 +14,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from ".
 import { Badge } from "./ui/badge";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "./ui/sheet";
 
-import { loadPrevisions, loadPurchases, loadConsommations } from "../services/mlData";
+import { loadPrevisions, loadPurchases, loadConsommations, loadBudgetState } from "../services/mlData";
+import * as XLSX from "xlsx";
 
 type Prevision = Awaited<ReturnType<typeof loadPrevisions>>[number];
 type Purchase = Awaited<ReturnType<typeof loadPurchases>>[number];
@@ -29,6 +28,7 @@ export function DashboardPage() {
   const [previsions, setPrevisions] = useState<Prevision[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [consommations, setConsommations] = useState<Consommation[]>([]);
+  const [selectedCodes, setSelectedCodes] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -39,14 +39,16 @@ export function DashboardPage() {
     const loadAll = async () => {
       try {
         const today = new Date().toISOString().slice(0, 10);
-        const [prev, purch, consos] = await Promise.all([
+        const [prev, purch, consos, budgetState] = await Promise.all([
           loadPrevisions(),
           loadPurchases(),
           loadConsommations(today),
+          loadBudgetState().catch(() => ({ budget_cap: null, selected_codes: [] })),
         ]);
         setPrevisions(prev);
         setPurchases(purch);
         setConsommations(consos);
+        setSelectedCodes(budgetState.selected_codes || []);
       } catch {
         setError("Erreur de chargement des données du tableau de bord");
       } finally {
@@ -70,6 +72,8 @@ export function DashboardPage() {
     previsions.forEach((p) => map.set(p.code, p));
     return map;
   }, [previsions]);
+
+  const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes]);
 
   const stats = useMemo(() => {
     const totalPrevision = previsions.reduce((s, p) => s + p.previsionM1, 0);
@@ -106,23 +110,77 @@ export function DashboardPage() {
   const chartCriticite = Object.values(criticityAgg);
 
   const criticalParts = purchases
-    .filter((p) => Math.round(p.quantite) > 0)
-    .sort((a, b) => (a.criticite === b.criticite ? b.quantite - a.quantite : a.criticite === "urgent" ? -1 : 1))
-    .slice(0, 8);
+    .filter(
+      (p) =>
+        Math.round(p.quantite) > 0 &&
+        (selectedSet.size === 0 || selectedSet.has(p.code)),
+    )
+    .sort((a, b) =>
+      a.criticite === b.criticite
+        ? b.quantite - a.quantite
+        : a.criticite === "urgent"
+          ? -1
+          : 1,
+    );
+
+  const handleExportExcel = () => {
+    if (criticalParts.length === 0) {
+      toast.error("Aucune piÇùce à exporter");
+      return;
+    }
+
+    try {
+      const rows = criticalParts.map((part) => {
+        const pv = previsionMap.get(part.code);
+        const delayDays = pv?.delai ?? 0;
+        return {
+          Code: part.code,
+          "Désignation": part.designation,
+          "Criticité": part.criticite,
+          "Qté à commander": Math.round(part.quantite),
+          "Budget (MAD)": part.total,
+          "Délai (j)": delayDays > 0 ? Math.round(delayDays) : "",
+        };
+      });
+
+      const worksheet = XLSX.utils.json_to_sheet(rows);
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Pièces prioritaires");
+
+      const wbout = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+      const blob = new Blob([wbout], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      const today = new Date().toISOString().slice(0, 10);
+      link.download = `pieces_prioritaires_${today}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      toast.error("Erreur lors de l'export Excel");
+    }
+  };
 
   const handleRefresh = async () => {
     setIsRefreshing(true);
     toast.loading("Actualisation des données en cours...");
     try {
       const today = new Date().toISOString().slice(0, 10);
-      const [prev, purch, consos] = await Promise.all([
+      const [prev, purch, consos, budgetState] = await Promise.all([
         loadPrevisions(),
         loadPurchases(),
         loadConsommations(today),
+        loadBudgetState().catch(() => ({ budget_cap: null, selected_codes: [] })),
       ]);
       setPrevisions(prev);
       setPurchases(purch);
       setConsommations(consos);
+      setSelectedCodes(budgetState.selected_codes || []);
       toast.success("Données actualisées");
     } catch {
       toast.error("Erreur lors de l’actualisation");
@@ -206,10 +264,6 @@ export function DashboardPage() {
         />
       </div>
 
-      <div className="animate-fade-in">
-        <LiveStatsWidget />
-      </div>
-
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 animate-slide-in-left">
         <InteractiveChart
           title="Prévision vs consommation"
@@ -276,11 +330,6 @@ export function DashboardPage() {
         </InteractiveChart>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6 animate-slide-in-bottom">
-        <LiveStatsWidget />
-        <ActivityFeed />
-      </div>
-
       <Card className="shadow-sm border-neutral-200 hover-lift animate-slide-in-right">
         <CardHeader className="flex flex-row items-start justify-between pb-4">
           <div className="space-y-1">
@@ -289,6 +338,18 @@ export function DashboardPage() {
           </div>
         </CardHeader>
         <CardContent className="overflow-x-auto -mx-6 px-6 md:mx-0 md:px-0">
+          <div className="flex justify-end mb-3">
+            {criticalParts.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-1"
+                onClick={handleExportExcel}
+              >
+                Exporter Excel
+              </Button>
+            )}
+          </div>
           <Table className="min-w-[900px]">
             <TableHeader>
               <TableRow className="bg-neutral-50 hover:bg-neutral-50">

@@ -210,9 +210,12 @@ export async function loadPurchases(): Promise<{
   if (!API_BASE) throw new Error("API_BASE requis pour loadPurchases");
   const [raw, apiPurch] = await Promise.all([loadRaw(), fetchOrNull<any[]>("/api/purchases/", true)]);
   const data = apiPurch && Array.isArray(apiPurch) && apiPurch.length > 0 ? apiPurch : raw;
+  const rawByCode = new Map(raw.map((r) => [r.code, r]));
 
     return data.map((r: any, idx: number) => {
-      const qty = Math.max(0, r.n_ac_2025 ?? r.quantite ?? 0);
+      const rawItem = rawByCode.get(r.code);
+      const nacFromRaw = rawItem && typeof rawItem.n_ac_2025 === "number" ? rawItem.n_ac_2025 : undefined;
+      const qty = Math.max(0, nacFromRaw ?? r.n_ac_2025 ?? r.quantite ?? 0);
       const pu = r.prixUnitaire ?? r.prix_uni ?? 0;
       const crit = (r.criticite ?? r.criticite?.toString() ?? "normal") as string;
         const total = qty * pu;

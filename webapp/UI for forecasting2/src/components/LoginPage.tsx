@@ -111,66 +111,15 @@ export function LoginPage({ onGoToSignup }: { onGoToSignup?: () => void }) {
             </Button>
           </form>
 
-          <div className="mt-6 pt-6 border-t border-neutral-200">
-            <div className="text-center space-y-3">
-              {onGoToSignup && (
-                <Button type="button" variant="outline" onClick={onGoToSignup} className="w-full h-11 mb-2">
+          {onGoToSignup && (
+            <div className="mt-6 pt-6 border-t border-neutral-200">
+              <div className="text-center">
+                <Button type="button" variant="outline" onClick={onGoToSignup} className="w-full h-11">
                   Créer un compte
                 </Button>
-              )}
-
-              <p className="text-small text-neutral-600 font-medium mb-3">Comptes de démonstration</p>
-              <div className="grid gap-2">
-                <button
-                  onClick={() => {
-                    setUsername('manager');
-                    setPassword('demo');
-                  }}
-                  className="text-left px-4 py-3 rounded-lg bg-neutral-50 hover:bg-neutral-100 transition-colors border border-neutral-200"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-small font-medium text-neutral-900">Manager</p>
-                      <p className="text-xs text-neutral-500">Accès complet au budget</p>
-                    </div>
-                    <span className="text-xs font-medium text-ocp-green">manager / demo</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setUsername('appro');
-                    setPassword('demo');
-                  }}
-                  className="text-left px-4 py-3 rounded-lg bg-neutral-50 hover:bg-neutral-100 transition-colors border border-neutral-200"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-small font-medium text-neutral-900">Approvisionnement</p>
-                      <p className="text-xs text-neutral-500">Gestion des prévisions</p>
-                    </div>
-                    <span className="text-xs font-medium text-ocp-green">appro / demo</span>
-                  </div>
-                </button>
-
-                <button
-                  onClick={() => {
-                    setUsername('logistique');
-                    setPassword('demo');
-                  }}
-                  className="text-left px-4 py-3 rounded-lg bg-neutral-50 hover:bg-neutral-100 transition-colors border border-neutral-200"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-small font-medium text-neutral-900">Logistique</p>
-                      <p className="text-xs text-neutral-500">Saisie des consommations</p>
-                    </div>
-                    <span className="text-xs font-medium text-ocp-green">logistique / demo</span>
-                  </div>
-                </button>
               </div>
             </div>
-          </div>
+          )}
 
           <div className="mt-6 text-center">
             <p className="text-xs text-neutral-500">© 2025 Groupe OCP. Tous droits réservés.</p>

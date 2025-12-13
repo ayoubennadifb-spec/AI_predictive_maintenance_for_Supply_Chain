@@ -85,6 +85,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
 
   const nbPieces = filteredPrevisions.length;
   const qteTotale = filteredPrevisions.reduce((sum, p) => sum + (p.n_ac_2025 ?? p.previsionM1), 0);
+  const qteTotaleArrondie = Math.round(qteTotale);
   const budgetTotal = isManager
     ? filteredPrevisions.reduce((sum, p) => sum + (p.n_ac_2025 ?? p.previsionM1) * p.prixUnitaire, 0)
     : 0;
@@ -170,7 +171,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
         sticky
         stats={[
           { label: 'Pièces', value: nbPieces, icon: <Package className="w-4 h-4 text-neutral-500" /> },
-          { label: 'Qté totale', value: qteTotale, icon: <TrendingUp className="w-4 h-4 text-neutral-500" /> },
+          { label: 'Qté totale', value: qteTotaleArrondie, icon: <TrendingUp className="w-4 h-4 text-neutral-500" /> },
           ...(isManager
             ? [
                 {
@@ -357,7 +358,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
                       </TableCell>
                       <TableCell className="text-right text-small text-neutral-700">{prev.moyenneM3.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-small font-medium text-neutral-900">
-                        {prev.previsionM1.toFixed(2)}
+                        {Math.round(prev.n_ac_2025 ?? prev.previsionM1).toString()}
                       </TableCell>
                       <TableCell className="text-center">
                         <Badge
@@ -437,7 +438,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
                   </div>
                   <div className="space-y-1">
                     <p className="text-small text-neutral-600">Prévision M+1</p>
-                    <p className="text-h4 text-primary">{selectedPrevision.previsionM1.toFixed(2)}</p>
+                    <p className="text-h4 text-primary">{Math.round(selectedPrevision.n_ac_2025 ?? selectedPrevision.previsionM1).toString()}</p>
                   </div>
                   <div className="space-y-1">
                     <p className="text-small text-neutral-600">Moyenne M-3</p>

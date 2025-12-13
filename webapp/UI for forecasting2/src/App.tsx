@@ -3,24 +3,23 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from './components/ui/tabs';
 import { Toaster } from './components/ui/sonner';
 import { Badge } from './components/ui/badge';
 import { Button } from './components/ui/button';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription, SheetTrigger } from './components/ui/sheet';
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle, SheetTrigger } from './components/ui/sheet';
 import { Alert, AlertDescription } from './components/ui/alert';
+
 import { DashboardPage } from './components/DashboardPage';
 import { PrevisionsPage } from './components/PrevisionsPage';
 import { SaisieConsommationsPage } from './components/SaisieConsommationsPage';
 import { GestionBudgetPage } from './components/GestionBudgetPage';
-import { AdminPage } from './components/AdminPage';
-import { ParametersPage } from './components/ParametersPage';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
-import { NotificationBadge } from './components/NotificationBadge';
 import { QuickSearch } from './components/QuickSearch';
 import { AuthProvider, useAuth } from './components/AuthContext';
-import { LayoutDashboard, TrendingUp, FileInput, Wallet, Shield, Menu, LogOut, AlertCircle, Settings } from 'lucide-react';
+
+import { LayoutDashboard, TrendingUp, FileInput, Wallet, Menu, LogOut, AlertCircle } from 'lucide-react';
+
 import ocpLogo from 'figma:asset/ea0333669458322a030507607d5724be95c62222.png';
 
-// Fonction utilitaire pour obtenir la variante du badge selon le rôle
-function getRoleBadgeVariant(role: string): "default" | "secondary" | "destructive" | "outline" {
+function getRoleBadgeVariant(role: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (role) {
     case 'manager':
       return 'default';
@@ -33,7 +32,6 @@ function getRoleBadgeVariant(role: string): "default" | "secondary" | "destructi
   }
 }
 
-// Fonction utilitaire pour obtenir le label du rôle
 function getRoleLabel(role: string): string {
   switch (role) {
     case 'manager':
@@ -48,19 +46,17 @@ function getRoleLabel(role: string): string {
 }
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'previsions' | 'saisie' | 'budget'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [prefillSearch, setPrefillSearch] = useState('');
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
   const { user, logout, isAuthenticated } = useAuth();
 
-  // Permissions selon le rôle (valeurs sûres même si user est null)
   const canAccessBudget = user?.role === 'manager';
-  const canAccessAdmin = user?.role === 'manager';
-  const canAccessParameters = user?.role === 'manager';
   const canAccessSaisie = user?.role === 'logistique' || user?.role === 'manager';
   const canAccessPrevisions = user?.role === 'approvisionnement' || user?.role === 'manager';
 
+  // Support programmatic navigation via custom event (e.g. QuickSearch)
   useEffect(() => {
     const handler = (event: Event) => {
       if (!isAuthenticated || !user) return;
@@ -75,46 +71,26 @@ function AppContent() {
         if (tab === 'previsions') return canAccessPrevisions;
         if (tab === 'saisie') return canAccessSaisie;
         if (tab === 'budget') return canAccessBudget;
-        if (tab === 'admin') return canAccessAdmin;
-        if (tab === 'parameters') return canAccessParameters;
         return tab === 'dashboard';
       };
 
-      setActiveTab(isAllowed(desiredTab) ? desiredTab : 'dashboard');
+      setActiveTab(isAllowed(desiredTab) ? (desiredTab as any) : 'dashboard');
     };
 
     window.addEventListener('ocp:navigate', handler as EventListener);
     return () => window.removeEventListener('ocp:navigate', handler as EventListener);
-  }, [isAuthenticated, user, canAccessAdmin, canAccessBudget, canAccessParameters, canAccessPrevisions, canAccessSaisie]);
+  }, [isAuthenticated, user, canAccessBudget, canAccessPrevisions, canAccessSaisie]);
 
   useEffect(() => {
     if (!isAuthenticated) setAuthView('login');
   }, [isAuthenticated]);
 
-  // Si l'utilisateur n'est pas connecté, afficher la page de connexion
   if (!isAuthenticated || !user) {
     if (authView === 'signup') {
       return <SignupPage onGoToLogin={() => setAuthView('login')} />;
     }
     return <LoginPage onGoToSignup={() => setAuthView('signup')} />;
   }
-
-  const getTabLabel = (tab: string) => {
-    switch (tab) {
-      case 'dashboard':
-        return 'Tableau de bord';
-      case 'previsions':
-        return 'Prévisions';
-      case 'saisie':
-        return 'Saisie consommations';
-      case 'budget':
-        return 'Gestion budget';
-      case 'admin':
-        return 'Administration';
-      default:
-        return tab;
-    }
-  };
 
   return (
     <div className="min-h-screen bg-background pb-20 md:pb-0">
@@ -123,19 +99,14 @@ function AppContent() {
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 md:gap-4">
-              <img 
-                src={ocpLogo} 
-                alt="OCP Group" 
-                className="h-8 md:h-10 w-auto object-contain flex-shrink-0"
-              />
+              <img src={ocpLogo} alt="OCP Group" className="h-8 md:h-10 w-auto object-contain flex-shrink-0" />
               <div className="h-8 md:h-10 w-px bg-neutral-300 hidden sm:block" />
               <div className="min-w-0">
                 <h1 className="text-neutral-900 text-sm md:text-base truncate font-semibold">Système de Prévision</h1>
-                <p className="text-xs text-neutral-500 hidden sm:block">Accouplements & Pièces détachées</p>
+                <p className="text-xs text-neutral-500 hidden sm:block">Accouplements &amp; Pièces détachées</p>
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
-              <NotificationBadge />
               <div className="text-right hidden md:block">
                 <p className="text-small text-neutral-600">Connecté en tant que</p>
                 <div className="flex items-center gap-2 justify-end">
@@ -145,6 +116,8 @@ function AppContent() {
                   </Badge>
                 </div>
               </div>
+
+              {/* Mobile user menu */}
               <Sheet open={mobileMenuOpen} onOpenChange={setMobileMenuOpen}>
                 <SheetTrigger asChild>
                   <Button variant="outline" size="sm" className="md:hidden">
@@ -164,17 +137,15 @@ function AppContent() {
                         {getRoleLabel(user.role)}
                       </Badge>
                     </div>
-                    <Button
-                      variant="outline"
-                      onClick={logout}
-                      className="w-full flex items-center gap-2"
-                    >
+                    <Button variant="outline" onClick={logout} className="w-full flex items-center gap-2">
                       <LogOut className="w-4 h-4" />
                       Déconnexion
                     </Button>
                   </div>
                 </SheetContent>
               </Sheet>
+
+              {/* Desktop logout */}
               <Button
                 variant="outline"
                 size="sm"
@@ -189,70 +160,56 @@ function AppContent() {
         </div>
       </header>
 
-      {/* Main Content */}
+      {/* Main content */}
       <main className="max-w-[1400px] mx-auto px-4 md:px-6 py-4 md:py-6">
-        {/* Quick Search Bar */}
+        {/* Quick search */}
         <div className="mb-6 hidden md:block animate-slide-in-top">
           <QuickSearch />
         </div>
 
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4 md:space-y-6">
-          {/* Desktop Navigation - OCP Styled */}
-          <TabsList className="hidden md:flex bg-white border border-neutral-200 p-1.5 shadow-elevation-2 rounded-lg h-auto gap-1">
-            <TabsTrigger 
-              value="dashboard" 
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as any)} className="space-y-4 md:space-y-6">
+          {/* Desktop tabs */}
+          <TabsList className="hidden md:flex w-full justify-start gap-2 bg-neutral-50/80 p-1.5 rounded-xl border border-neutral-200 shadow-sm mb-4">
+            <TabsTrigger
+              value="dashboard"
               className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
             >
               <LayoutDashboard className="w-4 h-4" />
               <span className="text-small">Tableau de bord</span>
             </TabsTrigger>
+
             {canAccessPrevisions && (
-              <TabsTrigger 
-                value="previsions" 
+              <TabsTrigger
+                value="previsions"
                 className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
               >
                 <TrendingUp className="w-4 h-4" />
                 <span className="text-small">Prévisions</span>
               </TabsTrigger>
             )}
+
             {canAccessSaisie && (
-              <TabsTrigger 
-                value="saisie" 
+              <TabsTrigger
+                value="saisie"
                 className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
               >
                 <FileInput className="w-4 h-4" />
                 <span className="text-small">Saisie consommations</span>
               </TabsTrigger>
             )}
-            {canAccessBudget && (
-              <TabsTrigger 
-                value="budget" 
-                className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
-              >
-                <Wallet className="w-4 h-4" />
-                <span className="text-small">Gestion budget</span>
-              </TabsTrigger>
-            )}
-            {canAccessParameters && (
-              <TabsTrigger 
-                value="parameters" 
-                className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
-              >
-                <Settings className="w-4 h-4" />
-                <span className="text-small">Paramètres</span>
-              </TabsTrigger>
-            )}
-            {canAccessAdmin && (
-              <TabsTrigger 
-                value="admin" 
-                className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
-              >
-                <Shield className="w-4 h-4" />
-                <span className="text-small">Administration</span>
-              </TabsTrigger>
-            )}
+
+              {canAccessBudget && (
+                <TabsTrigger
+                  value="budget"
+                  className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
+                >
+                  <Wallet className="w-4 h-4" />
+                  <span className="text-small">Gestion budget</span>
+                </TabsTrigger>
+              )}
           </TabsList>
 
+          {/* Tab content */}
           <TabsContent value="dashboard" className="space-y-4 md:space-y-6">
             <DashboardPage />
           </TabsContent>
@@ -284,58 +241,31 @@ function AppContent() {
             </TabsContent>
           )}
 
-          {canAccessParameters ? (
-            <TabsContent value="parameters" className="space-y-4 md:space-y-6">
-              <ParametersPage onBack={() => setActiveTab('admin')} />
-            </TabsContent>
-          ) : (
-            <TabsContent value="parameters" className="space-y-4 md:space-y-6">
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Accès refusé. Seuls les managers peuvent ajuster les paramètres.
-                </AlertDescription>
-              </Alert>
-            </TabsContent>
-          )}
-
-          {canAccessAdmin ? (
-            <TabsContent value="admin" className="space-y-4 md:space-y-6">
-              <AdminPage onOpenParameters={canAccessParameters ? () => setActiveTab('parameters') : undefined} />
-            </TabsContent>
-          ) : (
-            <TabsContent value="admin" className="space-y-4 md:space-y-6">
-              <Alert variant="destructive">
-                <AlertCircle className="h-4 w-4" />
-                <AlertDescription>
-                  Accès refusé. Seuls les managers ont accès à l'administration.
-                </AlertDescription>
-              </Alert>
-            </TabsContent>
-          )}
+          {/* admin tab removed */}
         </Tabs>
       </main>
 
-      {/* Mobile Bottom Navigation - OCP Styled */}
+      {/* Mobile bottom navigation */}
       <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-neutral-200 z-20 shadow-elevation-4">
-        <div className="grid grid-cols-6 gap-1 px-2 py-1">
+        <div className="grid grid-cols-5 gap-1 px-2 py-1">
           <button
             onClick={() => setActiveTab('dashboard')}
             className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-              activeTab === 'dashboard' 
-                ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
+              activeTab === 'dashboard'
+                ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm'
                 : 'text-neutral-600 hover:bg-neutral-50'
             }`}
           >
             <LayoutDashboard className="w-5 h-5" />
             <span className="text-xs mt-1">Accueil</span>
           </button>
+
           {canAccessPrevisions && (
             <button
               onClick={() => setActiveTab('previsions')}
               className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-                activeTab === 'previsions' 
-                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
+                activeTab === 'previsions'
+                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm'
                   : 'text-neutral-600 hover:bg-neutral-50'
               }`}
             >
@@ -343,12 +273,13 @@ function AppContent() {
               <span className="text-xs mt-1">Prév.</span>
             </button>
           )}
+
           {canAccessSaisie && (
             <button
               onClick={() => setActiveTab('saisie')}
               className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-                activeTab === 'saisie' 
-                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
+                activeTab === 'saisie'
+                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm'
                   : 'text-neutral-600 hover:bg-neutral-50'
               }`}
             >
@@ -356,12 +287,13 @@ function AppContent() {
               <span className="text-xs mt-1">Saisie</span>
             </button>
           )}
+
           {canAccessBudget && (
             <button
               onClick={() => setActiveTab('budget')}
               className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-                activeTab === 'budget' 
-                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
+                activeTab === 'budget'
+                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm'
                   : 'text-neutral-600 hover:bg-neutral-50'
               }`}
             >
@@ -369,32 +301,8 @@ function AppContent() {
               <span className="text-xs mt-1">Budget</span>
             </button>
           )}
-          {canAccessParameters && (
-            <button
-              onClick={() => setActiveTab('parameters')}
-              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-                activeTab === 'parameters' 
-                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
-                  : 'text-neutral-600 hover:bg-neutral-50'
-              }`}
-            >
-              <Settings className="w-5 h-5" />
-              <span className="text-xs mt-1">Params</span>
-            </button>
-          )}
-          {canAccessAdmin && (
-            <button
-              onClick={() => setActiveTab('admin')}
-              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
-                activeTab === 'admin' 
-                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm' 
-                  : 'text-neutral-600 hover:bg-neutral-50'
-              }`}
-            >
-              <Shield className="w-5 h-5" />
-              <span className="text-xs mt-1">Admin</span>
-            </button>
-          )}
+
+          {/* admin button removed */}
         </div>
       </nav>
     </div>
