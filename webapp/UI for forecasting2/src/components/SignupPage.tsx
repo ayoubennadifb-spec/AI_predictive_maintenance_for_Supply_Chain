@@ -149,6 +149,7 @@ export function SignupPage({ onGoToLogin }: { onGoToLogin?: () => void }) {
                     <SelectItem value="manager">Manager</SelectItem>
                     <SelectItem value="approvisionnement">Approvisionnement</SelectItem>
                     <SelectItem value="logistique">Logistique</SelectItem>
+                    <SelectItem value="superadmin">Super administrateur</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -203,4 +204,3 @@ export function SignupPage({ onGoToLogin }: { onGoToLogin?: () => void }) {
     </div>
   );
 }
-

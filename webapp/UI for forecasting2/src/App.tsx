@@ -13,9 +13,10 @@ import { GestionBudgetPage } from './components/GestionBudgetPage';
 import { LoginPage } from './components/LoginPage';
 import { SignupPage } from './components/SignupPage';
 import { QuickSearch } from './components/QuickSearch';
+import { AdminPage } from './components/AdminPage';
 import { AuthProvider, useAuth } from './components/AuthContext';
 
-import { LayoutDashboard, TrendingUp, FileInput, Wallet, Menu, LogOut, AlertCircle } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, FileInput, Wallet, Menu, LogOut, AlertCircle, Shield } from 'lucide-react';
 
 import ocpLogo from 'figma:asset/ea0333669458322a030507607d5724be95c62222.png';
 
@@ -27,6 +28,8 @@ function getRoleBadgeVariant(role: string): 'default' | 'secondary' | 'destructi
       return 'secondary';
     case 'logistique':
       return 'outline';
+    case 'superadmin':
+      return 'destructive';
     default:
       return 'outline';
   }
@@ -40,13 +43,15 @@ function getRoleLabel(role: string): string {
       return 'Approvisionnement';
     case 'logistique':
       return 'Logistique';
+    case 'superadmin':
+      return 'Super administrateur';
     default:
       return role;
   }
 }
 
 function AppContent() {
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'previsions' | 'saisie' | 'budget'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'previsions' | 'saisie' | 'budget' | 'admin'>('dashboard');
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [prefillSearch, setPrefillSearch] = useState('');
   const [authView, setAuthView] = useState<'login' | 'signup'>('login');
@@ -55,6 +60,7 @@ function AppContent() {
   const canAccessBudget = user?.role === 'manager';
   const canAccessSaisie = user?.role === 'logistique' || user?.role === 'manager';
   const canAccessPrevisions = user?.role === 'approvisionnement' || user?.role === 'manager';
+  const canAccessAdmin = user?.role === 'superadmin';
 
   // Support programmatic navigation via custom event (e.g. QuickSearch)
   useEffect(() => {
@@ -71,6 +77,7 @@ function AppContent() {
         if (tab === 'previsions') return canAccessPrevisions;
         if (tab === 'saisie') return canAccessSaisie;
         if (tab === 'budget') return canAccessBudget;
+        if (tab === 'admin') return canAccessAdmin;
         return tab === 'dashboard';
       };
 
@@ -79,7 +86,7 @@ function AppContent() {
 
     window.addEventListener('ocp:navigate', handler as EventListener);
     return () => window.removeEventListener('ocp:navigate', handler as EventListener);
-  }, [isAuthenticated, user, canAccessBudget, canAccessPrevisions, canAccessSaisie]);
+  }, [isAuthenticated, user, canAccessBudget, canAccessPrevisions, canAccessSaisie, canAccessAdmin]);
 
   useEffect(() => {
     if (!isAuthenticated) setAuthView('login');
@@ -198,7 +205,7 @@ function AppContent() {
               </TabsTrigger>
             )}
 
-              {canAccessBudget && (
+            {canAccessBudget && (
                 <TabsTrigger
                   value="budget"
                   className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
@@ -207,6 +214,16 @@ function AppContent() {
                   <span className="text-small">Gestion budget</span>
                 </TabsTrigger>
               )}
+
+            {canAccessAdmin && (
+              <TabsTrigger
+                value="admin"
+                className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
+              >
+                <Shield className="w-4 h-4" />
+                <span className="text-small">Administration</span>
+              </TabsTrigger>
+            )}
           </TabsList>
 
           {/* Tab content */}
@@ -241,7 +258,11 @@ function AppContent() {
             </TabsContent>
           )}
 
-          {/* admin tab removed */}
+          {canAccessAdmin && (
+            <TabsContent value="admin" className="space-y-4 md:space-y-6">
+              <AdminPage />
+            </TabsContent>
+          )}
         </Tabs>
       </main>
 
@@ -302,7 +323,19 @@ function AppContent() {
             </button>
           )}
 
-          {/* admin button removed */}
+          {canAccessAdmin && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`flex flex-col items-center justify-center py-2.5 px-1 rounded-lg transition-all ${
+                activeTab === 'admin'
+                  ? 'text-[#6BA539] bg-[#6BA539]/10 shadow-sm'
+                  : 'text-neutral-600 hover:bg-neutral-50'
+              }`}
+            >
+              <Shield className="w-5 h-5" />
+              <span className="text-xs mt-1">Admin</span>
+            </button>
+          )}
         </div>
       </nav>
     </div>

@@ -118,11 +118,13 @@ class UserProfile(models.Model):
     ROLE_MANAGER = "manager"
     ROLE_APPROVISIONNEMENT = "approvisionnement"
     ROLE_LOGISTIQUE = "logistique"
+    ROLE_SUPERADMIN = "superadmin"
 
     ROLE_CHOICES = (
         (ROLE_MANAGER, "Manager"),
         (ROLE_APPROVISIONNEMENT, "Approvisionnement"),
         (ROLE_LOGISTIQUE, "Logistique"),
+        (ROLE_SUPERADMIN, "Super administrateur"),
     )
 
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="profile")

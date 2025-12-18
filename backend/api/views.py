@@ -54,6 +54,25 @@ def ensure_manager(request):
     return (user, role), None
 
 
+def ensure_super_admin(request):
+    """
+    Helper for super-admin-only APIs (user management).
+
+    - Enforces API token via check_api_auth
+    - Enforces X-Role == superadmin (UserProfile.ROLE_SUPERADMIN)
+
+    Returns ((user, role), None) on success, or (None, JsonResponse) on failure.
+    """
+    if not check_api_auth(request):
+        return None, error_response("Unauthorized", status=403, code="unauthorized")
+
+    user, role = requester_identity(request)
+    if role != UserProfile.ROLE_SUPERADMIN:
+        return None, error_response("Accès réservé aux super-administrateurs", status=403, code="forbidden")
+
+    return (user, role), None
+
+
 # ---------------------------------------------------------------------------
 # Prévisions & achats
 # ---------------------------------------------------------------------------
@@ -1301,7 +1320,8 @@ def admin_consumption_detail(request, pk: int):
 @csrf_exempt
 @require_http_methods(["GET", "POST"])
 def admin_users(request):
-    identity, error = ensure_manager(request)
+    # Only super-admins can manage user accounts.
+    identity, error = ensure_super_admin(request)
     if error:
         return error
     user, role = identity
@@ -1380,7 +1400,8 @@ def admin_users(request):
 @csrf_exempt
 @require_http_methods(["GET", "PUT", "PATCH", "DELETE"])
 def admin_user_detail(request, pk: int):
-    identity, error = ensure_manager(request)
+    # Only super-admins can manage user accounts.
+    identity, error = ensure_super_admin(request)
     if error:
         return error
     actor, actor_role = identity
@@ -1481,6 +1502,8 @@ def _normalize_role(raw: str | None) -> str:
         return UserProfile.ROLE_APPROVISIONNEMENT
     if v in {"logistique", "logiqtique", "log"}:
         return UserProfile.ROLE_LOGISTIQUE
+    if v in {"superadmin", "super-admin", "admin"}:
+        return UserProfile.ROLE_SUPERADMIN
     return ""
 
 
@@ -1510,7 +1533,7 @@ def auth_signup(request):
     - password (required)
     - email (optional)
     - nom (optional)
-    - role (required): manager | approvisionnement | logistique
+    - role (required): manager | approvisionnement | logistique | superadmin
     """
     if not check_api_auth(request):
         return error_response("Unauthorized", status=403, code="unauthorized")
