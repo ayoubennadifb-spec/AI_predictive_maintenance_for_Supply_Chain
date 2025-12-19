@@ -8,7 +8,13 @@ import { Label } from "./ui/label";
 import { Badge } from "./ui/badge";
 import { useAuth } from "./AuthContext";
 import type { AdminUser } from "../services/adminData";
-import { adminCreateUser, adminDeleteUser, adminListUsers, adminUpdateUser } from "../services/adminData";
+import {
+  adminCreateUser,
+  adminDeleteUser,
+  adminGetUserPasswordResetCode,
+  adminListUsers,
+  adminUpdateUser,
+} from "../services/adminData";
 
 type RoleOption = "manager" | "approvisionnement" | "logistique" | "superadmin";
 
@@ -65,8 +71,6 @@ export function AdminPage() {
       setError(null);
       const res = await adminListUsers({
         search: search.trim() || undefined,
-        limit: 100,
-        offset: 0,
         identity,
       });
       setUsers(res.results);
@@ -157,6 +161,23 @@ export function AdminPage() {
       setError(err?.message || "Suppression utilisateur échouée.");
     } finally {
       setSubmitting(false);
+    }
+  }
+
+  async function handleShowResetCode(userRow: AdminUser) {
+    try {
+      setError(null);
+      const res = await adminGetUserPasswordResetCode(userRow.id, identity);
+      if (!res.ok || !res.code) {
+        window.alert("Aucun code de rÇ¸initialisation actif pour cet utilisateur.");
+        return;
+      }
+      const exp = res.expires_at ? new Date(res.expires_at).toLocaleString() : "inconnu";
+      window.alert(
+        `Code de rÇ¸initialisation pour ${userRow.username || userRow.email} : ${res.code}\n\nValide jusqu'au : ${exp}.`
+      );
+    } catch (err: any) {
+      setError(err?.message || "Impossible de rÇ¸cupÇ¸rer le code de rÇ¸initialisation.");
     }
   }
 
@@ -323,6 +344,14 @@ export function AdminPage() {
                     <Button
                       variant="outline"
                       size="sm"
+                      onClick={() => handleShowResetCode(u)}
+                      disabled={submitting}
+                    >
+                      Code de récupération
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
                       onClick={() => handleResetPassword(u)}
                       disabled={submitting}
                     >
@@ -352,4 +381,3 @@ export function AdminPage() {
     </div>
   );
 }
-

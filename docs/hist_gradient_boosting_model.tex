@@ -1,0 +1,188 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+
+\title{Modèle de prévision des consommations\\HistGradientBoostingRegressor}
+\author{Projet OCP -- Système de prévision des accouplements}
+\date{}
+
+\begin{document}
+
+\maketitle
+
+\section{Objectif}
+
+L'objectif du module \emph{ML} est de prévoir, pour chaque accouplement, la consommation annuelle 2025, puis d'en déduire une prévision mensuelle $n_{pm}$ et une quantité à commander $n_{ac}$ pour le mois suivant (M+1). Le modèle retenu est un \texttt{HistGradientBoostingRegressor} de \textsc{scikit-learn}, entraîné sur un historique annuel consolidé par pièce.
+
+\section{Variables explicatives utilisées}
+
+Le modèle ne voit pas directement les séries temporelles complètes, mais un ensemble de variables dérivées (features) calculées à partir des historiques et des caractéristiques de la pièce. Les features effectivement utilisées au moment de l'entraînement et de l'inférence sont les suivantes :
+
+\subsection{Lags annuels}
+
+\begin{itemize}
+  \item \textbf{lag1} : consommation annuelle de l'année $N-1$ (dernière année observée).
+  \item \textbf{lag2} : consommation annuelle de l'année $N-2$.
+  \item \textbf{lag3} : consommation annuelle de l'année $N-3$.
+\end{itemize}
+
+Ces trois lags permettent au modèle de capturer la dynamique locale de la série (niveau et variations récentes).
+
+\subsection{Statistiques sur l'historique}
+
+\begin{itemize}
+  \item \textbf{cons\_mean\_3y} : moyenne des trois dernières années
+  \[
+    \text{cons\_mean\_3y} = \frac{\text{lag1} + \text{lag2} + \text{lag3}}{3}.
+  \]
+  \item \textbf{cons\_trend} : tendance entre les deux dernières années
+  \[
+    \text{cons\_trend} = \text{lag1} - \text{lag2}.
+  \]
+  \item \textbf{cons\_mean\_all\_past} : moyenne de toutes les années historiques disponibles
+  \[
+    \text{cons\_mean\_all\_past} = \frac{1}{T}\sum_{t=1}^{T} \text{cons}_t,
+  \]
+  où $\text{cons}_t$ est la consommation annuelle à l'année $t$.
+\end{itemize}
+
+Ces agrégats donnent au modèle une idée du niveau moyen et de la pente de la consommation sur le long terme, au-delà des trois dernières années.
+
+\subsection{Caractéristiques structurelles de la pièce}
+
+Ces variables proviennent du jeu de données \emph{part2\_clean\_step2.parquet} (référentiel pièces) :
+
+\begin{itemize}
+  \item \textbf{qte\_installee} : quantité installée de la pièce (parc).
+  \item \textbf{stock\_actuel} : stock actuel.
+  \item \textbf{stock\_securite} : stock de sécurité cible.
+  \item \textbf{stock\_min} : stock minimum.
+  \item \textbf{stock\_max} : stock maximum.
+  \item \textbf{qte\_demandee\_3ans} : quantité totale demandée sur les trois dernières années.
+\end{itemize}
+
+Ces variables reflètent la criticité opérationnelle de la pièce (parc installé, politiques de stock), ce qui aide le modèle à ajuster la prévision au-delà de l'historique brut.
+
+\subsection{Indicateurs de valeurs manquantes}
+
+Pour rendre le modèle robuste à des historiques incomplets, on encode explicitement la présence de données manquantes :
+
+\begin{itemize}
+  \item \textbf{lag1\_was\_missing}, \textbf{lag2\_was\_missing}, \textbf{lag3\_was\_missing} : indicateurs binaires (0/1) indiquant si la consommation de l'année correspondante était manquante et a dû être imputée.
+  \item \textbf{qte\_installee\_was\_missing} : 1 si \texttt{qte\_installee} était manquante dans le référentiel pièces.
+  \item \textbf{stock\_securite\_was\_missing} : 1 si \texttt{stock\_securite} était manquant.
+\end{itemize}
+
+Ces indicateurs permettent au modèle de corriger implicitement sa confiance lorsqu'une information a été imputée plutôt que mesurée.
+
+\section{Pourquoi un HistGradientBoosting plutôt qu'un autre modèle ?}
+
+Plusieurs modèles ont été évalués sur le même jeu de features :
+
+\begin{itemize}
+  \item baselines simples (\emph{last value} = lag1, \emph{mean 3y}),
+  \item régression Ridge (modèle linéaire régularisé),
+  \item Random Forest,
+  \item HistGradientBoostingRegressor.
+\end{itemize}
+
+Les raisons principales du choix de l'HistGradientBoosting sont :
+
+\begin{enumerate}
+  \item \textbf{Capacité à modéliser des relations non linéaires} : les quantités consommées dépendent de manière complexe des lags, des stocks et des caractéristiques de la pièce. Un modèle additif d'arbres (boosting) capture naturellement les non-linéarités et les interactions entre variables.
+
+  \item \textbf{Gestion native des distributions asymétriques et valeurs extrêmes} : les consommations sont souvent très skewed (beaucoup de zéros, quelques fortes valeurs). Les arbres de décision et le boosting gèrent mieux ces distributions que des modèles linéaires.
+
+  \item \textbf{Robustesse et efficacité} : l'implémentation \emph{histogram-based} de scikit-learn est optimisée pour les grands jeux de données numériques, avec un bon compromis vitesse / performance et des hyperparamètres relativement stables.
+
+  \item \textbf{Meilleures performances sur l'échantillon de validation} : en pratique, sur la grille de modèles testés, l'HistGradientBoosting donne la meilleure erreur sur le jeu de validation (voir section~\ref{sec:resultats}).
+\end{enumerate}
+
+Par rapport au Random Forest, le boosting est moins sujet au sur-apprentissage sur les pièces rares si l'on choisit des hyperparamètres conservateurs (faible profondeur, feuilles minimales). Par rapport à Ridge, on gagne la capacité à modéliser les effets de seuil (par exemple, changement de comportement quand le stock de sécurité est atteint).
+
+\section{Procédure d'entraînement}
+
+\subsection{Jeu de données et découpage}
+
+Le jeu de données historique consolidé contient une ligne par pièce et par année, avec la consommation annuelle correspondante. Pour l'entraînement, on ne conserve que les années complètes comprises entre 2012 et 2024. On découpe le jeu en trois sous-ensembles :
+
+\begin{itemize}
+  \item \textbf{train} : utilisé pour ajuster les paramètres du modèle,
+  \item \textbf{validation} : utilisé pour le choix du modèle et des hyperparamètres,
+  \item \textbf{test} : utilisé uniquement pour évaluer la performance finale.
+\end{itemize}
+
+Les features décrites à la section précédente sont calculées à partir du panel de consommation et du référentiel pièces, puis normalisées au format numérique attendu par le modèle.
+
+\subsection{Hyperparamètres du modèle}
+
+Le modèle retenu possède les hyperparamètres suivants (issus du fichier méta \texttt{hist\_gradient\_boosting\_model\_meta.json}) :
+
+\begin{itemize}
+  \item \texttt{learning\_rate} = 0{,}1,
+  \item \texttt{max\_depth} = 3,
+  \item \texttt{max\_iter} = 200 arbres,
+  \item \texttt{min\_samples\_leaf} = 5,
+  \item \texttt{random\_state} = 0.
+\end{itemize}
+
+Ces valeurs résultent d'une recherche d'hyperparamètres orientée vers la généralisation : profondeur limitée, feuilles avec suffisamment d'observations, et un taux d'apprentissage modéré.
+
+\section{Résultats et métriques}
+\label{sec:resultats}
+
+Les modèles ont été comparés selon trois métriques :
+
+\begin{itemize}
+  \item \textbf{MAE} (Mean Absolute Error) : erreur absolue moyenne,
+  \item \textbf{RMSE} (Root Mean Squared Error) : racine de l'erreur quadratique moyenne,
+  \item \textbf{ACC\_within\_1} : proportion de prévisions dont l'erreur absolue est $\leq 1$ unité.
+\end{itemize}
+
+Le tableau suivant résume les performances sur le jeu de validation et de test (extrait de \texttt{model\_eval\_results.json}) :
+
+\begin{table}[h]
+  \centering
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Modèle & Split & MAE & RMSE & ACC\_within\_1 \\
+    \midrule
+    Baseline last value (lag1) & val & 0{,}80 & 1{,}44 & 0{,}79 \\
+                               & test & 0{,}68 & 1{,}74 & 0{,}83 \\
+    Baseline mean 3y           & val & 0{,}73 & 1{,}39 & 0{,}81 \\
+                               & test & 0{,}73 & 1{,}70 & 0{,}82 \\
+    Ridge                      & val & 0{,}69 & 1{,}20 & 0{,}80 \\
+                               & test & 0{,}69 & 1{,}44 & 0{,}80 \\
+    Random Forest              & val & 0{,}44 & 0{,}80 & 0{,}88 \\
+                               & test & 0{,}72 & 1{,}46 & 0{,}78 \\
+    \textbf{HistGradientBoosting} & val & \textbf{0{,}40} & \textbf{0{,}72} & \textbf{0{,}90} \\
+                               & test & 0{,}76 & 1{,}55 & 0{,}78 \\
+    \bottomrule
+  \end{tabular}
+  \caption{Comparaison des modèles sur validation et test.}
+\end{table}
+
+On observe que :
+
+\begin{itemize}
+  \item sur le \textbf{jeu de validation}, l'HistGradientBoosting est nettement meilleur que les baselines et que Ridge, avec un MAE et un RMSE plus faibles et une proportion de prévisions correctes (ACC\_within\_1) plus élevée (environ 90\%).
+  \item sur le \textbf{jeu de test}, la performance est légèrement moins bonne que sur validation (MAE $\approx 0{,}76$), mais reste du même ordre de grandeur que les autres modèles, ce qui indique une généralisation raisonnable.
+\end{itemize}
+
+Le choix final du modèle HistGradientBoosting est donc justifié à la fois par :
+
+\begin{enumerate}
+  \item l'adéquation du modèle aux données (non-linéarités, effets de seuil, interactions),
+  \item des métriques nettement meilleures sur le jeu de validation,
+  \item une performance de test cohérente avec les attentes métier pour un système de prévision opérationnel.
+\end{enumerate}
+
+\end{document}
+

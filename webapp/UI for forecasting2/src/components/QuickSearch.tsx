@@ -15,6 +15,7 @@ interface SearchResult {
 const API_BASE =
   ((import.meta as any).env?.VITE_API_BASE as string | undefined)?.trim() ||
   (typeof window !== 'undefined' ? window.location.origin : '');
+const API_TOKEN = (import.meta as any).env?.VITE_API_TOKEN || '';
 
 const recentSearches = ['ACC-001', 'Stock critique', 'Prévisions'];
 
@@ -35,7 +36,11 @@ export function QuickSearch() {
     const timer = setTimeout(async () => {
       try {
         const url = `${API_BASE}/api/previsions/?search=${encodeURIComponent(q)}&limit=8`;
-        const res = await fetch(url);
+        const res = await fetch(url, {
+          method: 'GET',
+          headers: API_TOKEN ? { 'X-API-KEY': API_TOKEN } : undefined,
+          credentials: 'include',
+        });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
         const data = (await res.json()) as any[];
         if (cancelled) return;

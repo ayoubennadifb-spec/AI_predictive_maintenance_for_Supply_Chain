@@ -76,22 +76,40 @@ export function DashboardPage() {
   const selectedSet = useMemo(() => new Set(selectedCodes), [selectedCodes]);
 
   const stats = useMemo(() => {
+    // Somme des prévisions mensuelles (n_pm)
     const totalPrevision = previsions.reduce((s, p) => s + p.previsionM1, 0);
+    // Somme des quantités à commander (n_ac_2025) pour le mois suivant
+    const totalToOrder = previsions.reduce((s, p) => s + (p.n_ac_2025 ?? 0), 0);
     // Valeur "Stock total" = somme des consommations actuelles accumulées (page Saisie consommations)
     const totalStock = consommations.reduce((s, c) => s + (c.consommationReelle ?? 0), 0);
     const criticalCount = previsions.filter((p) => p.criticite === "urgent").length;
     const budgetTotal = purchases.reduce((s, p) => s + p.total, 0);
-    return { totalPrevision, totalStock, criticalCount, budgetTotal };
+    return { totalPrevision, totalToOrder, totalStock, criticalCount, budgetTotal };
   }, [previsions, purchases, consommations]);
 
-  const chartPrevisionStock = previsions.slice(0, 8).map((p) => {
-    const cons = consommationMap.get(p.code);
-    return {
-      code: p.code,
-      prevision: p.previsionM1,
-      consommation: cons ?? 0,
-    };
-  });
+  // Top pièces pour le graphe "Prévision vs consommation"
+  const chartPrevisionStock = useMemo(() => {
+    const TOP_N = 8;
+    const merged = previsions.map((p) => {
+      const cons = consommationMap.get(p.code) ?? 0;
+      const prevision = p.previsionM1;
+      const nac = p.n_ac_2025 ?? p.previsionM1;
+      // Score de tri = max entre consommation actuelle, prévision ML et NAC
+      const score = Math.max(cons, prevision, nac);
+      return {
+        code: p.code,
+        prevision,
+        consommation: cons,
+        score,
+      };
+    });
+    merged.sort((a, b) => b.score - a.score);
+    return merged.slice(0, TOP_N).map(({ code, prevision, consommation }) => ({
+      code,
+      prevision,
+      consommation,
+    }));
+  }, [previsions, consommationMap]);
 
   const criticityAgg = previsions.reduce(
     (acc, p) => {
@@ -249,8 +267,8 @@ export function DashboardPage() {
 
         <KPICard
           title="Prévision mois suivant"
-          value={stats.totalPrevision.toFixed(1)}
-          subtitle="Consommation mensuelle totale (n_pm)"
+          value={Math.round(stats.totalToOrder).toString()}
+          subtitle="Somme des quantités à commander (n_ac_2025)"
           icon={TrendingUp}
           isLoading={isRefreshing}
         />

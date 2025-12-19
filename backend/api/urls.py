@@ -3,7 +3,11 @@ from . import views
 
 urlpatterns = [
     path("auth/login/", views.auth_login, name="auth_login"),
+    path("auth/me/", views.auth_me, name="auth_me"),
+    path("auth/logout/", views.auth_logout, name="auth_logout"),
     path("auth/signup/", views.auth_signup, name="auth_signup"),
+    path("auth/forgot-password/", views.auth_forgot_password, name="auth_forgot_password"),
+    path("auth/reset-password/", views.auth_reset_password, name="auth_reset_password"),
     path("previsions/", views.previsions, name="previsions"),
     path("purchases/", views.purchases, name="purchases"),
     path("metrics/", views.metrics, name="metrics"),
@@ -25,4 +29,5 @@ urlpatterns = [
     path("admin/consumptions/<int:pk>/", views.admin_consumption_detail, name="admin_consumption_detail"),
     path("admin/users/", views.admin_users, name="admin_users"),
     path("admin/users/<int:pk>/", views.admin_user_detail, name="admin_user_detail"),
+    path("admin/users/<int:pk>/password-reset-code/", views.admin_user_password_reset_code, name="admin_user_password_reset_code"),
 ]

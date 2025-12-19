@@ -26,6 +26,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "api.middleware.ApiAuthMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
 ]
 
@@ -73,3 +74,8 @@ CORS_ALLOW_HEADERS = list(default_headers) + [
     "X-USER",
     "X-ROLE",
 ]
+
+# Email (used for "mot de passe oublié")
+EMAIL_BACKEND = os.environ.get("DJANGO_EMAIL_BACKEND", "django.core.mail.backends.console.EmailBackend")
+DEFAULT_FROM_EMAIL = os.environ.get("DJANGO_DEFAULT_FROM_EMAIL", "no-reply@example.com")
+PASSWORD_RESET_CODE_TTL_MINUTES = int(os.environ.get("PASSWORD_RESET_CODE_TTL_MINUTES", "15"))

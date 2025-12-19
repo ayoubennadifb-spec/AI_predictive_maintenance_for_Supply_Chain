@@ -1,0 +1,198 @@
+\documentclass[aspectratio=169]{beamer}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{amsmath, amssymb}
+\usepackage{booktabs}
+
+\usetheme{Madrid}
+\setbeamertemplate{navigation symbols}{}
+
+\title[Modèle HistGradientBoosting]{Prévision de la consommation des accouplements\\Modèle HistGradientBoostingRegressor}
+\author{Projet OCP -- Système de prévision}
+\date{}
+
+\begin{document}
+
+\begin{frame}
+  \titlepage
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Objectif}
+  \begin{itemize}
+    \item Prévoir la consommation annuelle 2025 de chaque accouplement.
+    \item En déduire une prévision mensuelle $n_{pm}$ et une quantité à commander $n_{ac}$ pour le mois suivant (M+1).
+    \item Modèle retenu : \textbf{HistGradientBoostingRegressor} (\textsc{scikit-learn}).
+  \end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Jeu de données}
+  \begin{itemize}
+    \item Panel de consommation annuelle par pièce (2012--2024).
+    \item Référentiel pièces (\texttt{part2\_clean\_step2.parquet}) :
+      \begin{itemize}
+        \item informations de stock (stock actuel, stock de sécurité, min/max),
+        \item quantité installée, demande cumulée 3 ans.
+      \end{itemize}
+    \item Une ligne d'apprentissage = \textbf{une pièce} avec ses variables dérivées.
+  \end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Features (1/3) -- Lags annuels}
+  \textbf{Historique de consommation par pièce :}
+  \begin{itemize}
+    \item \textbf{lag1} : consommation annuelle année $N-1$.
+    \item \textbf{lag2} : consommation annuelle année $N-2$.
+    \item \textbf{lag3} : consommation annuelle année $N-3$.
+  \end{itemize}
+  \vspace{0.5em}
+  \begin{block}{Rôle}
+    Ces lags capturent le niveau récent et les variations à court terme de la consommation.
+  \end{block}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Features (2/3) -- Statistiques sur l'historique}
+  \begin{itemize}
+    \item \textbf{cons\_mean\_3y} : moyenne des 3 dernières années
+      \[
+        \text{cons\_mean\_3y} = (\text{lag1} + \text{lag2} + \text{lag3})/3.
+      \]
+    \item \textbf{cons\_trend} : tendance récente
+      \[
+        \text{cons\_trend} = \text{lag1} - \text{lag2}.
+      \]
+    \item \textbf{cons\_mean\_all\_past} : moyenne de toutes les années historiques.
+  \end{itemize}
+  \vspace{0.5em}
+  \begin{block}{Rôle}
+    Résumer le niveau moyen et la pente de long terme de la consommation.
+  \end{block}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Features (3/3) -- Structure et valeurs manquantes}
+  \textbf{Caractéristiques structurelles de la pièce :}
+  \begin{itemize}
+    \item \textbf{qte\_installee} (parc installé).
+    \item \textbf{stock\_actuel}, \textbf{stock\_securite}, \textbf{stock\_min}, \textbf{stock\_max}.
+    \item \textbf{qte\_demandee\_3ans} (demande totale sur 3 ans).
+  \end{itemize}
+  \vspace{0.5em}
+  \textbf{Indicateurs de données manquantes :}
+  \begin{itemize}
+    \item \textbf{lag1\_was\_missing}, \textbf{lag2\_was\_missing}, \textbf{lag3\_was\_missing}.
+    \item \textbf{qte\_installee\_was\_missing}, \textbf{stock\_securite\_was\_missing}.
+  \end{itemize}
+  \begin{block}{Rôle}
+    Intégrer la criticité opérationnelle de la pièce et informer le modèle lorsqu'une donnée est imputée.
+  \end{block}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Pourquoi HistGradientBoosting ?}
+  \begin{itemize}
+    \item \textbf{Non-linéarités et interactions} :
+      \begin{itemize}
+        \item relation complexe entre lags, stocks et demandes,
+        \item les arbres de décision + boosting capturent naturellement ces effets.
+      \end{itemize}
+    \item \textbf{Gestion des distributions skewed} :
+      \begin{itemize}
+        \item beaucoup de pièces à faible consommation, quelques pièces très consommatrices,
+        \item les arbres sont robustes aux valeurs extrêmes.
+      \end{itemize}
+    \item \textbf{Implémentation efficace} :
+      \begin{itemize}
+        \item version histogramme de scikit-learn, bien adaptée aux features numériques,
+        \item bon compromis vitesse / performance.
+      \end{itemize}
+    \item \textbf{Par rapport au Random Forest} :
+      \begin{itemize}
+        \item RF obtient de bonnes performances mais a tendance à sur-apprendre sur certaines pièces rares,
+        \item le boosting, avec une profondeur limitée et un taux d'apprentissage modéré, est plus régularisé et
+              donne un meilleur MAE/RMSE sur le jeu de validation.
+      \end{itemize}
+    \item \textbf{Meilleures performances sur validation} que les baselines, Ridge et Random Forest.
+  \end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Procédure d'entraînement}
+  \begin{itemize}
+    \item Sélection des années complètes 2012--2024.
+    \item Construction du jeu de features par pièce.
+    \item Découpage des données :
+      \begin{itemize}
+        \item \textbf{train} : apprentissage des paramètres,
+        \item \textbf{validation} : choix du modèle / hyperparamètres,
+        \item \textbf{test} : évaluation finale.
+      \end{itemize}
+    \item Hyperparamètres du modèle retenu :
+      \begin{itemize}
+        \item \texttt{learning\_rate} = 0.1, \texttt{max\_depth} = 3,
+        \item \texttt{max\_iter} = 200, \texttt{min\_samples\_leaf} = 5.
+      \end{itemize}
+  \end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Métriques d'évaluation}
+  \begin{itemize}
+    \item \textbf{MAE} : Mean Absolute Error.
+    \item \textbf{RMSE} : Root Mean Squared Error.
+    \item \textbf{ACC\_within\_1} : proportion de prévisions dont l'erreur absolue $\leq 1$ unité.
+  \end{itemize}
+  \vspace{0.5em}
+  Modèles comparés :
+  \begin{itemize}
+    \item baselines (\textit{last value}, \textit{mean 3y}),
+    \item Ridge,
+    \item Random Forest,
+    \item HistGradientBoosting.
+  \end{itemize}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Résultats comparés (validation / test)}
+  \small
+  \begin{tabular}{lcccc}
+    \toprule
+    Modèle & Split & MAE & RMSE & ACC\_within\_1 \\
+    \midrule
+    Baseline last value & val & 0.80 & 1.44 & 0.79 \\
+                        & test & 0.68 & 1.74 & 0.83 \\
+    Baseline mean 3y    & val & 0.73 & 1.39 & 0.81 \\
+                        & test & 0.73 & 1.70 & 0.82 \\
+    Ridge               & val & 0.69 & 1.20 & 0.80 \\
+                        & test & 0.69 & 1.44 & 0.80 \\
+    Random Forest       & val & 0.44 & 0.80 & 0.88 \\
+                        & test & 0.72 & 1.46 & 0.78 \\
+    \textbf{HistGradBoost} & val & \textbf{0.40} & \textbf{0.72} & \textbf{0.90} \\
+                        & test & 0.76 & 1.55 & 0.78 \\
+    \bottomrule
+  \end{tabular}
+\end{frame}
+
+%--------------------------------------------------------------------
+\begin{frame}{Conclusion}
+  \begin{itemize}
+    \item Ensemble compact de features :
+      \begin{itemize}
+        \item lags, moyennes, tendance,
+        \item caractéristiques de stock et indicateurs de données manquantes.
+      \end{itemize}
+    \item HistGradientBoosting offre le meilleur compromis :
+      \begin{itemize}
+        \item erreurs (MAE / RMSE) les plus faibles sur validation,
+        \item modèle robuste et interprétable pour un usage opérationnel.
+      \end{itemize}
+    \item Les prévisions obtenues alimentent le calcul de $n_{pm}$ et de la quantité à commander $n_{ac}$ pour la gestion des accouplements.
+  \end{itemize}
+\end{frame}
+
+\end{document}

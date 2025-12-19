@@ -1,18 +1,23 @@
 import json
+import hashlib
+import secrets
 from datetime import datetime, date as dt_date, timedelta
 from pathlib import Path
 
-from django.contrib.auth import authenticate, get_user_model
+from django.conf import settings
+from django.contrib.auth import authenticate, get_user_model, login as django_login, logout as django_logout
+from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Q, Sum
 from django.http import JsonResponse
+from django.utils import timezone
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_http_methods
 
 import pandas as pd
 
 from .export import export_budget_csv, export_consumptions_csv, export_previsions_csv
-from .models import ActivityLog, BudgetConfig, Consumption, Part, Selection, UserProfile
+from .models import ActivityLog, BudgetConfig, Consumption, Part, Selection, UserProfile, PasswordResetCode
 from .utils import (
     check_api_auth,
     ensure_parts_loaded,
@@ -1327,6 +1332,32 @@ def admin_users(request):
     user, role = identity
 
     if request.method == "GET":
+        # Synchronise les profils manquants pour les utilisateurs existants
+        try:
+            User = get_user_model()
+            existing_ids = set(UserProfile.objects.values_list("user_id", flat=True))
+            missing_users = User.objects.exclude(id__in=existing_ids)
+            to_create = []
+            for u in missing_users:
+                display_name = (
+                    getattr(u, "get_full_name", lambda: "")()
+                    or getattr(u, "first_name", "")
+                    or getattr(u, "username", "")
+                    or ""
+                )
+                to_create.append(
+                    UserProfile(
+                        user=u,
+                        role=UserProfile.ROLE_MANAGER,
+                        nom=display_name,
+                    )
+                )
+            if to_create:
+                UserProfile.objects.bulk_create(to_create, ignore_conflicts=True)
+        except Exception:
+            # Ne jamais bloquer la liste en cas de problème de synchro
+            pass
+
         qs = UserProfile.objects.select_related("user").all().order_by("-created_at")
 
         search = request.GET.get("search")
@@ -1489,6 +1520,52 @@ def admin_user_detail(request, pk: int):
     return JsonResponse(_serialize_user_admin(profile))
 
 
+@require_GET
+def admin_user_password_reset_code(request, pk: int):
+    """
+    Permet au superadmin de consulter le dernier code de rÇ¸initialisation
+    de mot de passe encore valide pour un utilisateur donnÇ¸.
+
+    Use-case : un utilisateur a cliquÇ¸ sur « mot de passe oubliÇ¸ » mais ne
+    reÁoit pas l'email ; le superadmin peut lire ici le code pour le lui communiquer.
+    """
+    identity, error = ensure_super_admin(request)
+    if error:
+        return error
+
+    User = get_user_model()
+    user_obj = User.objects.filter(pk=pk).first()
+    if not user_obj:
+        return error_response("User not found", status=404, code="not_found")
+
+    now = timezone.now()
+    pr = (
+        PasswordResetCode.objects.filter(
+            user=user_obj,
+            used_at__isnull=True,
+            expires_at__gt=now,
+        )
+        .order_by("-created_at")
+        .first()
+    )
+    if not pr or not pr.code_plain:
+        return JsonResponse({"ok": False, "code": None, "created_at": None, "expires_at": None})
+
+    return JsonResponse(
+        {
+            "ok": True,
+            "code": pr.code_plain,
+            "created_at": pr.created_at.isoformat(),
+            "expires_at": pr.expires_at.isoformat(),
+            "user": {
+                "id": int(getattr(user_obj, "pk", 0)),
+                "username": getattr(user_obj, "username", ""),
+                "email": getattr(user_obj, "email", "") or "",
+            },
+        }
+    )
+
+
 # ---------------------------------------------------------------------------
 # Auth (signup/login) - simple JSON API for the React app
 # ---------------------------------------------------------------------------
@@ -1533,7 +1610,7 @@ def auth_signup(request):
     - password (required)
     - email (optional)
     - nom (optional)
-    - role (required): manager | approvisionnement | logistique | superadmin
+    - role (required): manager | approvisionnement | logistique
     """
     if not check_api_auth(request):
         return error_response("Unauthorized", status=403, code="unauthorized")
@@ -1553,6 +1630,9 @@ def auth_signup(request):
     if not username or not password or not role:
         return error_response("Missing fields", status=400, code="missing_fields")
 
+    if role == UserProfile.ROLE_SUPERADMIN:
+        return error_response("Invalid role", status=400, code="invalid_role")
+
     if len(password) < 4:
         return error_response("Password too short", status=400, code="password_too_short")
 
@@ -1570,6 +1650,7 @@ def auth_signup(request):
             except Exception:
                 pass
         UserProfile.objects.create(user=user, role=role, nom=nom)
+        django_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
     except Exception as exc:
         return error_response("Signup failed", status=500, code="signup_failed", details=str(exc))
 
@@ -1621,4 +1702,153 @@ def auth_login(request):
             },
         )
 
+    django_login(request, user)
     return JsonResponse({"ok": True, "user": _user_payload(user)})
+
+
+@require_GET
+def auth_me(request):
+    if not getattr(request, "user", None) or not request.user.is_authenticated:
+        return error_response("Not authenticated", status=401, code="not_authenticated")
+    return JsonResponse({"ok": True, "user": _user_payload(request.user)})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def auth_logout(request):
+    django_logout(request)
+    return JsonResponse({"ok": True})
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def auth_forgot_password(request):
+    """
+    Request a password reset code (sent by email when configured).
+
+    Body JSON:
+    - usernameOrEmail
+
+    Always returns ok=true (prevents account enumeration).
+    In DEBUG, returns a debugCode to help local testing.
+    """
+    if not check_api_auth(request):
+        return error_response("Unauthorized", status=403, code="unauthorized")
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    username_or_email = str(payload.get("usernameOrEmail") or "").strip()
+    if not username_or_email:
+        return error_response("Missing fields", status=400, code="missing_fields")
+
+    User = get_user_model()
+    user = User.objects.filter(username__iexact=username_or_email).first()
+    if user is None and "@" in username_or_email:
+        user = User.objects.filter(email__iexact=username_or_email).first()
+
+    debug_code = None
+    if user:
+        # 6-digit code, valid for a short duration.
+        code = f"{secrets.randbelow(1_000_000):06d}"
+        code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+        expires_at = timezone.now() + timedelta(minutes=getattr(settings, "PASSWORD_RESET_CODE_TTL_MINUTES", 15))
+
+        # On stocke à la fois le hash et le code en clair.
+        # Le code en clair est destiné à être consulté par le superadmin
+        # dans l'interface de gestion et sera vidé dès utilisation.
+        PasswordResetCode.objects.create(
+            user=user,
+            code_hash=code_hash,
+            code_plain=code,
+            expires_at=expires_at,
+        )
+
+        if getattr(settings, "DEBUG", False):
+            debug_code = code
+
+        # Send email if possible (console backend by default in settings.py)
+        try:
+            to_email = getattr(user, "email", "") or ""
+            if to_email:
+                send_mail(
+                    subject="Réinitialisation du mot de passe",
+                    message=(
+                        "Vous avez demandé une réinitialisation de mot de passe.\n\n"
+                        f"Code: {code}\n\n"
+                        "Si vous n'êtes pas à l'origine de cette demande, ignorez cet email."
+                    ),
+                    from_email=getattr(settings, "DEFAULT_FROM_EMAIL", None),
+                    recipient_list=[to_email],
+                    fail_silently=True,
+                )
+        except Exception:
+            pass
+
+    resp = {"ok": True}
+    if debug_code is not None:
+        resp["debugCode"] = debug_code
+    return JsonResponse(resp)
+
+
+@csrf_exempt
+@require_http_methods(["POST"])
+def auth_reset_password(request):
+    """
+    Reset password using a previously issued reset code.
+
+    Body JSON:
+    - usernameOrEmail
+    - code
+    - newPassword
+    """
+    if not check_api_auth(request):
+        return error_response("Unauthorized", status=403, code="unauthorized")
+
+    try:
+        payload = json.loads(request.body.decode("utf-8"))
+    except Exception:
+        return error_response("Invalid JSON", status=400, code="invalid_json")
+
+    username_or_email = str(payload.get("usernameOrEmail") or "").strip()
+    code = str(payload.get("code") or "").strip()
+    new_password = str(payload.get("newPassword") or "")
+
+    if not username_or_email or not code or not new_password:
+        return error_response("Missing fields", status=400, code="missing_fields")
+
+    if len(new_password) < 4:
+        return error_response("Password too short", status=400, code="password_too_short")
+
+    User = get_user_model()
+    user = User.objects.filter(username__iexact=username_or_email).first()
+    if user is None and "@" in username_or_email:
+        user = User.objects.filter(email__iexact=username_or_email).first()
+    if not user:
+        return error_response("Invalid code", status=400, code="invalid_code")
+
+    code_hash = hashlib.sha256(code.encode("utf-8")).hexdigest()
+    pr = (
+        PasswordResetCode.objects.filter(user=user, code_hash=code_hash, used_at__isnull=True, expires_at__gt=timezone.now())
+        .order_by("-created_at")
+        .first()
+    )
+    if not pr:
+        return error_response("Invalid code", status=400, code="invalid_code")
+
+    user.set_password(new_password)
+    user.save()
+    pr.used_at = timezone.now()
+    # On efface le code en clair pour limiter la persistance en base.
+    pr.code_plain = ""
+    pr.save(update_fields=["used_at", "code_plain"])
+
+    # Optional: log the user in after reset
+    try:
+        django_login(request, user, backend="django.contrib.auth.backends.ModelBackend")
+    except Exception:
+        pass
+
+    return JsonResponse({"ok": True})

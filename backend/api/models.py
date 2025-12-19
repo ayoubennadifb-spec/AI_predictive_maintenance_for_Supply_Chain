@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.db import models
+from django.utils import timezone
 
 
 class Part(models.Model):
@@ -144,3 +145,26 @@ class UserProfile(models.Model):
             "email": getattr(self.user, "email", "") or "",
             "role": self.role,
         }
+
+
+class PasswordResetCode(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="password_reset_codes")
+    code_hash = models.CharField(max_length=64)  # sha256 hex digest
+    # Stockage temporaire du code en clair pour permettre au superadmin de le communiquer
+    # à l'utilisateur (interface d'administration). Il est vidé dès utilisation.
+    code_plain = models.CharField(max_length=16, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        verbose_name = "Password reset code"
+        verbose_name_plural = "Password reset codes"
+        indexes = [
+            models.Index(fields=["user", "created_at"]),
+            models.Index(fields=["expires_at"]),
+            models.Index(fields=["used_at"]),
+        ]
+
+    def is_valid(self) -> bool:
+        return self.used_at is None and self.expires_at > timezone.now()

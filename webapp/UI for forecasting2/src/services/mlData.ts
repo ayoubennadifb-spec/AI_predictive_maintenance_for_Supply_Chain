@@ -49,7 +49,11 @@ async function fetchOrNull<T>(path: string, enforceApi = false): Promise<T | nul
     return null;
   }
   try {
-    const res = await fetch(`${API_BASE}${path}`);
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: "GET",
+      headers: API_TOKEN ? { "X-API-KEY": API_TOKEN } : undefined,
+      credentials: "include",
+    });
     if (!res.ok) {
       if (enforceApi) throw new Error(`API ${path} status ${res.status}`);
       return null;
@@ -164,6 +168,7 @@ export async function saveConsommations(
   const res = await fetch(`${API_BASE}/api/consommations/`, {
     method: "POST",
     headers: buildJsonHeaders(identity),
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   if (!res.ok) {
@@ -184,6 +189,7 @@ export async function resetConsommations(
   const res = await fetch(`${API_BASE}/api/consommations/reset/`, {
     method: "POST",
     headers: buildJsonHeaders(identity),
+    credentials: "include",
     body: JSON.stringify(opts),
   });
   if (!res.ok) {
@@ -249,6 +255,7 @@ export async function saveBudgetState(
   await fetch(`${API_BASE}/api/budget/state/`, {
     method: "POST",
     headers: buildJsonHeaders(identity),
+    credentials: "include",
     body: JSON.stringify({ budget_cap, selected_codes }),
   });
 }
@@ -302,6 +309,7 @@ export async function importConsommationsFile(
   const res = await fetch(`${API_BASE}/api/consommations/import/`, {
     method: "POST",
     headers,
+    credentials: "include",
     body: fd,
   });
   if (!res.ok) {
@@ -384,6 +392,7 @@ export async function loadParameters(): Promise<{ data: ParametersConfig; source
   try {
     const res = await fetch(`${API_BASE}/api/parameters/`, {
       headers: API_TOKEN ? { "X-API-KEY": API_TOKEN } : undefined,
+      credentials: "include",
     });
     if (!res.ok) throw new Error("parameters fetch failed");
     const json = await res.json();
@@ -403,6 +412,7 @@ export async function saveParameters(payload: ParametersConfig, identity?: ApiId
   const res = await fetch(`${API_BASE}/api/parameters/`, {
     method: "POST",
     headers: buildJsonHeaders(identity),
+    credentials: "include",
     body: JSON.stringify(payload),
   });
   if (!res.ok) {

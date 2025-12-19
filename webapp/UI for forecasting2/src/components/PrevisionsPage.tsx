@@ -46,7 +46,6 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const [selectedMonth, setSelectedMonth] = useState('octobre-2025');
   const [selectedType, setSelectedType] = useState('tous');
   const [selectedCriticite, setSelectedCriticite] = useState('tous');
   const [selectedFournisseur, setSelectedFournisseur] = useState('tous');
@@ -135,7 +134,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `previsions_${selectedMonth}.csv`;
+    link.download = "previsions.csv";
     link.click();
     URL.revokeObjectURL(url);
     toast.success('Fichier exporté', { description: `${filteredPrevisions.length} lignes exportées.` });
@@ -202,22 +201,7 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
               </Button>
             )}
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 md:gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="mois" className="text-small">
-                Mois
-              </Label>
-              <Select value={selectedMonth} onValueChange={setSelectedMonth}>
-                <SelectTrigger id="mois" className="rounded-input">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="octobre-2025">Octobre 2025</SelectItem>
-                  <SelectItem value="novembre-2025">Novembre 2025</SelectItem>
-                  <SelectItem value="decembre-2025">Décembre 2025</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
             <div className="space-y-2">
               <Label htmlFor="type" className="text-small">
                 Type d'accouplement
@@ -310,14 +294,11 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
                     <TableHead className="text-small font-semibold text-neutral-700 sticky left-0 bg-neutral-50">
                       Code
                     </TableHead>
-                    <TableHead className="text-small font-semibold text-neutral-700">Désignation</TableHead>
                     <TableHead className="text-small font-semibold text-neutral-700">Type</TableHead>
                     <TableHead className="text-small font-semibold text-neutral-700">Criticité</TableHead>
                     <TableHead className="text-small font-semibold text-neutral-700 text-right">Stock act.</TableHead>
                     <TableHead className="text-small font-semibold text-neutral-700 text-right">Stock sécu.</TableHead>
-                    <TableHead className="text-small font-semibold text-neutral-700 text-right">Moy. M-3</TableHead>
                     <TableHead className="text-small font-semibold text-neutral-700 text-right">Prév. M+1</TableHead>
-                    <TableHead className="text-small font-semibold text-neutral-700 text-center">% écart</TableHead>
                     {isManager && (
                       <TableHead className="text-small font-semibold text-neutral-700 text-right">
                         Prix unit. (MAD)
@@ -339,7 +320,6 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
                           <span>{prev.code}</span>
                         </div>
                       </TableCell>
-                      <TableCell className="text-small text-neutral-700">{prev.designation}</TableCell>
                       <TableCell className="text-small">
                         <Badge variant="secondary" className="bg-neutral-50 text-neutral-700 border-neutral-200">
                           {prev.type}
@@ -356,21 +336,8 @@ export function PrevisionsPage({ prefillSearch }: PrevisionsPageProps) {
                       <TableCell className="text-right text-small text-neutral-700">
                         {prev.stockSecurite.toFixed(2)}
                       </TableCell>
-                      <TableCell className="text-right text-small text-neutral-700">{prev.moyenneM3.toFixed(2)}</TableCell>
                       <TableCell className="text-right text-small font-medium text-neutral-900">
                         {Math.round(prev.n_ac_2025 ?? prev.previsionM1).toString()}
-                      </TableCell>
-                      <TableCell className="text-center">
-                        <Badge
-                          variant="secondary"
-                          className={`text-xs ${
-                            prev.ecartPourcent > 20
-                              ? 'bg-warning-50 text-warning-700 border-warning-200'
-                              : 'bg-success-50 text-success-700 border-success-200'
-                          }`}
-                        >
-                          +{prev.ecartPourcent}%
-                        </Badge>
                       </TableCell>
                       {isManager && (
                         <TableCell className="text-right text-small font-medium text-neutral-900">

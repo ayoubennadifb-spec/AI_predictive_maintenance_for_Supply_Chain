@@ -2,7 +2,7 @@ import json
 from pathlib import Path
 from django.db import transaction
 import os
-from .models import Part, ActivityLog, ParametersConfig
+from .models import Part, ActivityLog, ParametersConfig, UserProfile
 from . import inference
 
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -152,12 +152,45 @@ def check_api_auth(request) -> bool:
     token = os.getenv("API_TOKEN")
     if not token:
         return True
+
+    # If the request is already authenticated via Django session, do not require an API key.
+    try:
+        user_obj = getattr(request, "user", None)
+        if user_obj and getattr(user_obj, "is_authenticated", False):
+            return True
+    except Exception:
+        pass
+
+    # Auth endpoints must remain accessible to allow users to log in / reset passwords.
+    try:
+        if (request.path or "").startswith("/api/auth/"):
+            return True
+    except Exception:
+        pass
+
     provided = request.headers.get("X-API-KEY")
     return provided == token
 
 
 def requester_identity(request):
-    """Get user/role from headers (optional) for activity logs."""
+    """
+    Return the requester identity for activity logs.
+
+    Prefer the authenticated Django user (session) when available.
+    Falls back to request headers for backward compatibility.
+    """
+    try:
+        user_obj = getattr(request, "user", None)
+        if user_obj and getattr(user_obj, "is_authenticated", False):
+            profile = getattr(user_obj, "profile", None)
+            role = getattr(profile, "role", None) or UserProfile.ROLE_MANAGER
+            display_name = (
+                getattr(profile, "nom", "") if profile else ""
+            ) or getattr(user_obj, "get_full_name", lambda: "")() or getattr(user_obj, "username", "") or "Utilisateur"
+            return display_name, role
+    except Exception:
+        pass
+
     user = request.headers.get("X-User", "Système")
     role = request.headers.get("X-Role", "Auto")
     return user, role

@@ -25,6 +25,7 @@ async function apiRequest<T>(
   const init: RequestInit = {
     method,
     headers: buildJsonHeaders(options?.identity),
+    credentials: "include",
   };
   if (options?.body !== undefined) {
     init.body = JSON.stringify(options.body);
@@ -266,3 +267,23 @@ export async function adminDeleteUser(id: number, identity: ApiIdentity): Promis
   });
 }
 
+export type AdminPasswordResetCodeResponse = {
+  ok: boolean;
+  code: string | null;
+  created_at: string | null;
+  expires_at: string | null;
+  user?: {
+    id: number;
+    username: string;
+    email: string;
+  };
+};
+
+export async function adminGetUserPasswordResetCode(
+  id: number,
+  identity: ApiIdentity
+): Promise<AdminPasswordResetCodeResponse> {
+  return apiRequest<AdminPasswordResetCodeResponse>(`/api/admin/users/${id}/password-reset-code/`, {
+    identity,
+  });
+}
