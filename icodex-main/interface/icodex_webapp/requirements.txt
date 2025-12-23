@@ -1,0 +1,12 @@
+fastapi
+uvicorn[standard]
+jinja2
+python-multipart
+PyPDF2
+requests
+reportlab
+psycopg2-binary
+python-docx
+python-pptx
+langgraph
+langdetect

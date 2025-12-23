@@ -1,0 +1,28 @@
+.git
+.gitignore
+
+__pycache__/
+*.pyc
+.venv/
+.env
+
+node_modules/
+**/node_modules/
+dist/
+**/dist/
+build/
+**/build/
+.vite/
+**/.vite/
+
+# Runtime data (never bake into the image)
+interface/icodex_webapp/data/
+interface/user_runs/
+
+# Generated artifacts
+*_extracted*.txt
+*_extracted*_chunks*.json
+*_extracted*_structure*.json
+*_extracted*_quiz*.json
+*_extracted*_quiz*.pdf
+*_difficulty.json

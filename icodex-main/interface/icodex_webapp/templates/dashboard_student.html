@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" type="image/svg+xml" href="/icodex_logo.svg?v=2" />
+  <link rel="stylesheet" href="/static/main.css">
+  <title>ICodex | Student</title>
+</head>
+<body class="page">
+  <header class="topbar">
+    <a class="brand" href="/">
+      <img class="brand-logo" src="/icodex_logo_full.svg" alt="ICODEX MODEL" />
+    </a>
+    <div class="spacer"></div>
+    <div class="user-chip">{{ user.full_name }} (Student)</div>
+    <a class="link" href="/logout">Logout</a>
+  </header>
+
+  <main class="grid">
+    <section class="card">
+      <h2>Upload practice test</h2>
+      <form action="/student/upload_practice" method="post" enctype="multipart/form-data" class="form">
+        <label>PDF <input type="file" name="pdf" accept=".pdf" required></label>
+        <label>Cerebras API key <input type="password" name="api_key" required></label>
+        <label>Model <input name="model" value="llama3.1-8b"></label>
+        <button type="submit">Upload & Generate</button>
+      </form>
+    </section>
+
+    <section class="card full">
+      <h2>Your assigned tests</h2>
+      <div class="assignments">
+        {% for a in assignments %}
+          <div class="card">
+            <h3>{{ a.test.title }}</h3>
+            <p class="muted">Status: {{ a.status }}</p>
+            <div class="form inline">
+              <button type="button" class="start-test" data-assignment="{{ a.assignment_id }}">Start test</button>
+            </div>
+            <div class="question-box" data-assignment="{{ a.assignment_id }}">
+              <p class="muted">Not started.</p>
+            </div>
+          </div>
+        {% else %}
+          <p class="muted">No assignments yet.</p>
+        {% endfor %}
+      </div>
+    </section>
+
+    <section class="card full">
+      <h2>Your practice tests</h2>
+      <table class="table">
+        <thead><tr><th>Title</th><th>Status</th><th>PDF</th><th>Log</th></tr></thead>
+        <tbody>
+          {% for t in practice_tests %}
+            <tr>
+              <td>{{ t.title }}</td>
+              <td>{{ t.status }}</td>
+              <td>
+                {% if t.status == "ready" %}
+                  <a class="link" href="/teacher/test_pdf/{{ t.id }}" target="_blank">View</a>
+                {% else %}-{% endif %}
+              </td>
+              <td>
+                {% if t.log %}
+                  <details><summary>View</summary><pre class="logbox">{% for line in t.log %}{{ line }}
+{% endfor %}</pre></details>
+                {% else %}<span class="muted">--</span>{% endif %}
+              </td>
+            </tr>
+          {% else %}
+            <tr><td colspan="4" class="muted">No practice tests yet.</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </section>
+  </main>
+  <script src="/static/main.js"></script>
+</body>
+</html>

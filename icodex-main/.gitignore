@@ -1,0 +1,27 @@
+node_modules/
+build/
+dist/
+.vite/
+
+__pycache__/
+*.pyc
+
+*.log
+tmp_*
+*.tmp
+
+# Local env
+.env
+.venv/
+
+# Runtime / generated artifacts (do not commit)
+interface/icodex_webapp/data/
+interface/user_runs/
+
+# PDF->quiz pipeline artifacts (regenerated outputs)
+*_extracted*.txt
+*_extracted*_chunks*.json
+*_extracted*_structure*.json
+*_extracted*_quiz*.json
+*_extracted*_quiz*.pdf
+*_difficulty.json

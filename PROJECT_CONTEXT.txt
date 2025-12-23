@@ -1,0 +1,324 @@
+ICodex Project Context (for GPT-5.2 prompt generator)
+=====================================================
+
+Goal
+----
+Provide a deep, end-to-end description of the ICodeX codebase so an AI can
+quickly understand architecture, data flow, and implementation hotspots.
+
+High-Level Summary
+------------------
+- ICodeX is an AI-driven evaluation system that converts course materials into
+  structured quizzes (JSON + PDF), evaluates student answers, computes mastery,
+  and recommends the next question adaptively.
+- The system has a FastAPI backend (with optional Postgres storage) and a React
+  frontend. A minimal Jinja UI exists as a fallback.
+- Core pipeline uses Cerebras Chat Completions API to rewrite, chunk, structure,
+  generate questions, annotate difficulty, and render PDFs.
+
+Repository Layout
+-----------------
+Root:
+- run.py: starts FastAPI app at interface/icodex_webapp/app.py
+- requirements.txt: points to interface/icodex_webapp/requirements.txt
+- Dockerfile: builds React app, then runs Python backend
+- render.yaml: Render deployment config
+- .env.example: env var guidance
+
+Pipeline:
+- questions generator/
+  - files_to_text.py: extract text from PDF/DOCX/PPTX
+  - text_rewriter.py: LLM rewrite (Cerebras)
+  - text_to_chunks.Py: LLM semantic chunking (note uppercase .Py)
+  - chunks_to_structure.py: LLM course hierarchy
+  - structure_to_questions.Py: LLM question generation + reviewer
+  - reviewer.py: LLM quality gate + dedupe
+  - difficulty_assessor.py: LLM difficulty annotation
+  - quiz_to_pdf.py: ReportLab PDF rendering
+  - requirements.txt: pipeline deps
+
+Scoring + Recommendation:
+- answers evaluation/
+  - answer_evaluator.py: per-answer metrics
+  - mastery_scorer.py: converts metrics to mastery score
+- questions recommander/
+  - question_recommender.py: adaptive next-question selection
+
+Backend:
+- interface/icodex_webapp/
+  - app.py: FastAPI app, state, pipeline orchestration, analytics
+  - templates/: minimal HTML
+  - static/: CSS/JS for minimal UI
+
+Frontend:
+- interface/icodex_figma_interface/
+  - Vite + React app (Redesign)
+  - src/components/*: role-specific dashboards and flows
+  - src/utils/api.ts: fetch wrapper (cookies, JSON)
+
+Core Pipeline Data Flow
+-----------------------
+Contracts (naming from README and code):
+1) files_to_text.py
+   Input: PDF/DOCX/PPTX files
+   Output: <stem>_merged_raw.txt with page markers
+
+2) text_rewriter.py (Cerebras)
+   Input: merged raw text
+   Output: <stem>_merged_cleaned.txt
+   Behavior: remove duplication, preserve ordering and facts
+
+3) text_to_chunks.Py (Cerebras)
+   Input: cleaned text
+   Output: <stem>_extracted_chunks.json
+   JSON shape:
+   {
+     "total_chunks": N,
+     "chunks": [{ "id", "text", "char_count", "word_count" }]
+   }
+
+4) chunks_to_structure.py (Cerebras)
+   Input: chunks JSON
+   Output: <stem>_extracted_chunks_structure.json
+   Schema:
+   course -> modules -> mini_modules -> concepts -> mini_concepts
+   Each mini_concept has keywords and source_evidence excerpts.
+
+5) structure_to_questions.Py (Cerebras)
+   Input: structure JSON
+   Output: <stem>_extracted_chunks_structure_quiz.json
+   Adds questions[] to concept nodes.
+   Ensures 4 options, includes correct_answer, assigns id.
+   Includes reviewer pass to remove weak/duplicate questions.
+
+6) difficulty_assessor.py (Cerebras)
+   Input: quiz JSON
+   Output: same JSON with difficulty, confidence, rationale
+
+7) quiz_to_pdf.py (ReportLab)
+   Input: quiz JSON
+   Output: quiz PDF with answer key
+
+Important pipeline notes:
+- The pipeline uses Cerebras Chat Completions at https://api.cerebras.ai/v1/.
+- Model defaults are typically "llama3.1-8b" in scripts; backend defaults to
+  "llama-3.3-70b" in some UI flows.
+- Script names are case sensitive; text_to_chunks.Py and structure_to_questions.Py
+  are not lowercase.
+
+Answer Evaluation and Mastery
+-----------------------------
+answer_evaluator.py
+- Computes:
+  - is_correct (string equality after normalization)
+  - similarity (SequenceMatcher ratio)
+  - time_ratio (time_taken / expected_time)
+  - speed_score (penalize slow/fast)
+  - timing_alignment
+  - difficulty_weight (easy/medium/hard/very_hard)
+  - confidence (weighted combination)
+- Output is a JSON object with metrics and notes.
+
+mastery_scorer.py
+- Converts evaluation metrics to mastery_score 0-100.
+- Factors: accuracy, speed_score, confidence, difficulty_weight, correct bonus,
+  pacing penalty if too slow.
+
+Question Recommender
+--------------------
+question_recommender.py
+- Inputs: quiz JSON, evaluation JSON, optional mastery JSON, optional manual score.
+- Uses position path to find node in hierarchy.
+- Chooses next question based on performance score:
+  - Low score: reinforce same node, mini-module, module
+  - Mid: sibling mini-modules, module level
+  - High: other modules, course level
+- Avoids duplicates by ID or normalized signature.
+
+Backend Architecture (FastAPI)
+------------------------------
+Main file: interface/icodex_webapp/app.py
+
+Storage
+- Default: JSON state file at interface/icodex_webapp/data/state.json
+- Optional Postgres when DATABASE_URL is set:
+  - icodex_state: JSONB state blob
+  - icodex_test_artifacts: quiz JSON/PDF/source PDF
+  - icodex_users: user list for easy SQL visibility
+- DATA_DIR can be overridden with ICODEX_DATA_DIR.
+- FORCE_FILE_STATE can disable DB usage even when DATABASE_URL is set.
+
+State Shape (top-level keys)
+- users: user profiles
+- sessions: cookie-based sessions
+- tests: generated tests and pipeline info
+- assignments: class assignments and student sessions
+- classes: classes, teachers, students, leaderboard config
+- audit_logs: admin actions
+- config: feature flags, permissions, model meta, gamification config
+- gamification: xp, streaks, quests, leaderboards, achievements
+
+Authentication
+- JSON API:
+  - POST /api/auth/signup
+  - POST /api/auth/login
+  - POST /api/auth/logout
+  - GET /api/auth/me
+  - PUT /api/auth/me (profile updates)
+- Cookie session: "session_id" stored in state["sessions"].
+- Passwords are stored in plaintext (demo-grade).
+- ensure_default_admin() creates admin@icodex.com/admin if no admin exists.
+
+Pipeline Integration (Backend)
+run_pipeline() in app.py:
+- Executes pipeline scripts via subprocess with env CEREBRAS_API_KEY.
+- Generates 100-question bank; renders PDF capped to question_limit.
+- Stores file paths in test["paths"].
+- Sets test["status"] to "pending_review" for class_test, "ready" for practice.
+- Computes and stores quality metrics (difficulty + Bloom + concept coverage).
+- Persists artifacts to Postgres if DATABASE_URL is set.
+
+Tests
+- Created via POST /api/tests with payload:
+  - title, comment, questionLimit, pdfBase64, apiKey, model
+  - kind: "class_test" or "practice"
+  - includeDifficulty (optional)
+  - goals (optional, used by UI but not currently enforced in pipeline)
+- Teacher legacy form upload: POST /teacher/upload_pdf
+- Student practice upload (legacy): POST /student/upload_practice
+
+Assignments and Sessions
+- Admin approve class test:
+  - POST /api/tests/approve
+  - Creates assignment for a class, sets test status to ready
+- Teacher assignment (if enabled):
+  - POST /api/tests/assign (teacher_can_assign config)
+
+Adaptive Sessions (Assigned tests)
+- POST /api/sessions/start: starts a session, picks first question
+- POST /api/sessions/submit-answer: evaluates answer, updates mastery,
+  awards XP, uses recommender, and returns next question or completion.
+
+Practice Sessions
+- POST /api/practice/start and /api/practice/answer:
+  similar flow to assigned sessions, but stored under practice sessions/results.
+
+Reports and Analytics
+---------------------
+Mastery report:
+- GET /api/tests/{test_id}/mastery-report?student_id=...&format=json|pdf|html
+- Uses assignment session data to build strengths/weaknesses and answered details.
+
+Insights:
+- GET /api/reports/insights
+- Aggregates concepts, misconceptions, behavior signals from answer events.
+
+Admin overview:
+- GET /api/admin/overview
+- Totals, mastery, pipeline health, risk stats, gamification metrics.
+
+Class analytics:
+- GET /api/classes/{class_id}/analytics
+- Concept coverage, weak areas, activity stats.
+
+Leaderboard:
+- GET/PUT /api/classes/{class_id}/leaderboard
+- Controlled by gamification config and per-class config.
+
+Risk and Mastery Stats
+----------------------
+- Risk signals are computed from mastery averages:
+  - high: avg_mastery < 60
+  - medium: avg_mastery < 75
+  - low: otherwise
+- Student overview combines mastery, confidence, streak, progress, gamification.
+
+Frontend Overview (React)
+-------------------------
+Main app: interface/icodex_figma_interface
+- Vite dev server proxies /api to backend.
+- Uses a modern UI system with Radix UI + custom components.
+- Landing, Auth, role-based Shell with Admin/Teacher/Student sections.
+
+Admin UI:
+- AdminDashboard: /api/admin/overview
+- AdminUsers: /api/users, /api/users/bulk, /api/audit
+- AdminClasses: /api/classes, /api/classes/*, /api/classes/health
+- AdminTests: /api/tests, /api/tests/approve, /api/tests/{id}/quiz
+
+Teacher UI:
+- QuizStudio: POST /api/tests (with pdfBase64)
+  - Polls /api/tests/my-tests until ready/pending_review.
+- TeacherTests: /api/tests/my-tests, /api/tests/{id}/quiz
+- TeacherDashboard: /api/tests/my-tests, /api/assignments/results, /api/classes/health
+
+Student UI:
+- AssignedTests: /api/assignments/my-assignments
+- Practice: /api/tests (practice), /api/practice/start, /api/practice/answer
+- StudentDashboard: /api/student/overview, /api/student/plan, /api/quests
+- Reports: /api/reports/insights, mastery report endpoints
+
+Minimal Jinja UI:
+- interface/icodex_webapp/templates/*
+- Uses static/main.js to run adaptive flows against /student/start_adaptive
+  and /student/answer_adaptive endpoints.
+
+Deployment and Runtime
+----------------------
+- Dockerfile builds React (npm run build) then runs Python backend.
+- Render health check at /api/health.
+- CEREBRAS_API_KEY is required for pipeline runs.
+- DATABASE_URL enables Postgres persistence; otherwise JSON file storage.
+
+Important Files to Inspect When Working
+----------------------------------------
+- interface/icodex_webapp/app.py (core business logic, API, pipeline, storage)
+- questions generator/* (pipeline scripts + prompts)
+- answers evaluation/* (scoring logic)
+- questions recommander/question_recommender.py (adaptive logic)
+- interface/icodex_figma_interface/src/components/* (UI flows)
+
+Known Issues / Gaps (from ad.md and code)
+-----------------------------------------
+- Neon DB table visibility: state stored in icodex_state JSONB, separate icodex_users table exists.
+- "View PDF mastery report" issues: PDF inline render path uses /api/tests/{id}/mastery-report format.
+- Duplicate report creation: potential duplication in assignments vs practice results.
+- Language mismatch / low quality questions: prompts might not enforce language/topic strongly enough.
+- Missing endpoint: UI posts to /api/teacher/classes/{class_id}/quests but backend does not define it.
+- Case-sensitive filenames: text_to_chunks.Py and structure_to_questions.Py.
+
+Environment Variables (Key)
+---------------------------
+- CEREBRAS_API_KEY: required for pipeline
+- DATABASE_URL: enable Postgres state and artifacts
+- ICODEX_DATA_DIR: where to store job files
+- ICODEX_STATE_FILE: override state.json path
+- ICODEX_FRONTEND_BUILD: custom React build path
+- ICODEX_STORE_SOURCE_PDF: store source PDFs in Postgres artifacts
+- ICODEX_FORCE_FILE_STATE: ignore DB and force local JSON state
+- ICODEX_SKIP_DB_HEALTH: skip DB health check in /api/health
+
+Testing and Running (Local)
+---------------------------
+Backend:
+  python -m venv .venv
+  .venv\Scripts\activate.bat
+  pip install -r requirements.txt
+  set CEREBRAS_API_KEY=...
+  python run.py
+
+Frontend:
+  cd interface\icodex_figma_interface
+  npm install
+  npm run dev
+  (Vite proxies /api -> http://localhost:8001)
+
+Summary for AI Handoff
+----------------------
+Use interface/icodex_webapp/app.py as the source of truth for API behavior,
+state layout, and pipeline orchestration. The pipeline is modular and driven
+by subprocess calls to scripts in questions generator/. The React UI is
+feature-rich and expects JSON APIs; a minimal Jinja UI exists for fallback.
+When diagnosing issues, pay special attention to state persistence mode
+(JSON vs Postgres), pipeline script names and prompts, and the dual test flows
+(class_test vs practice).
