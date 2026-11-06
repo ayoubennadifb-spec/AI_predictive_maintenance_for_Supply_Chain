@@ -10,7 +10,8 @@ django.setup()
 import numpy as np
 import pandas as pd
 from django.contrib.auth import get_user_model
-from api.models import UserProfile
+from api.models import UserProfile, Part
+from api.utils import ensure_parts_loaded
 
 OUT = ROOT / "data" / "processed"
 OUT.mkdir(parents=True, exist_ok=True)
@@ -43,3 +44,7 @@ if created:
     user.save(update_fields=["password"])
 UserProfile.objects.update_or_create(user=user, defaults={"role":"manager","nom":"Portfolio Demo"})
 print("Synthetic demo dataset generated: 120 spare parts; public demo account has no password.")
+
+ensure_parts_loaded()
+assert Part.objects.count() == 120, f"Expected 120 synthetic model forecasts, got {Part.objects.count()}"
+print("Real HistGradientBoosting inference verified for 120 synthetic spare parts.")
