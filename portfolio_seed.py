@@ -1,11 +1,17 @@
 """Generate deterministic, entirely synthetic portfolio data. No OCP source files are read."""
 from pathlib import Path
+import os
+import sys
+ROOT = Path(__file__).resolve().parent
+sys.path.insert(0, str(ROOT / 'backend'))
+os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
+import django
+django.setup()
 import numpy as np
 import pandas as pd
 from django.contrib.auth import get_user_model
 from api.models import UserProfile
 
-ROOT = Path(__file__).resolve().parents[2]
 OUT = ROOT / "data" / "processed"
 OUT.mkdir(parents=True, exist_ok=True)
 rng = np.random.default_rng(2026)
