@@ -216,7 +216,7 @@ export function DashboardPage() {
   if (error) return <div className="p-6 text-red-600">{error}</div>;
 
   return (
-    <div className="space-y-6 page-transition">
+    <div className="space-y-6 page-transition">\n      <section className="portfolio-hero" aria-label="Présentation de la plateforme">\n        <div className="portfolio-hero-top">SUPPLY CHAIN / PREDICTIVE ANALYTICS</div>\n        <h2>Anticiper la demande. Optimiser chaque décision.</h2>\n        <p>Une vue unifiée des prévisions de pièces détachées, des risques de rupture et des priorités d’approvisionnement, alimentée par un modèle de machine learning.</p>\n        <div className="portfolio-hero-tags"><span>Modèle ML opérationnel</span><span>120 références de démonstration</span><span>Environnement de simulation</span></div>\n      </section>
       <PageHeader
         title="Tableau de bord principal"
         description="Vue d'ensemble des prévisions et besoins calculés"
@@ -274,9 +274,9 @@ export function DashboardPage() {
         />
 
         <KPICard
-          title="Stock total"
+          title="Consommation enregistrée"
           value={stats.totalStock.toFixed(0)}
-          subtitle="Accouplements en inventaire"
+          subtitle="Consommation cumulée enregistrée"
           icon={Package}
           isLoading={isRefreshing}
         />
@@ -305,7 +305,7 @@ export function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="prevision"
-                stroke="#6BA539"
+                stroke="#0d9488"
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
                 name="Prévision ML (n_pm)"
@@ -313,7 +313,7 @@ export function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="consommation"
-                stroke="#0B3D91"
+                stroke="#6478b9"
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
                 name="Consommation actuelle cumulée"
@@ -341,8 +341,8 @@ export function DashboardPage() {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: "12px" }} iconType="circle" />
-              <Bar dataKey="stock" stackId="a" fill="#6BA539" name="En stock" />
-              <Bar dataKey="aCommander" stackId="a" fill="#DC2626" name="À commander (NAC)" />
+              <Bar dataKey="stock" stackId="a" fill="#0d9488" name="En stock" />
+              <Bar dataKey="aCommander" stackId="a" fill="#f59e0b" name="À commander (NAC)" />
             </BarChart>
           </ResponsiveContainer>
         </InteractiveChart>
