@@ -10,7 +10,7 @@ class PortfolioDemoMiddleware:
         if os.getenv("PORTFOLIO_DEMO") != "1":
             return self.get_response(request)
         path = request.path or ""
-        if path.startswith("/admin/"):
+        if path.startswith("/admin/") or path.startswith("/api/auth/") or path.startswith("/api/users/"):
             return JsonResponse({"error":"Disabled in portfolio demo"}, status=403)
         if request.method not in ("GET","HEAD","OPTIONS"):
             return JsonResponse({"error":"Read-only portfolio demo"}, status=403)
