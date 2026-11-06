@@ -75,11 +75,7 @@ async function loadRaw(options?: { forceApi?: boolean }): Promise<MLRawItem[]> {
 async function loadStockSecuriteMap(): Promise<Record<string, number>> {
   if (stockSecuriteMap) return stockSecuriteMap;
   if (!API_BASE) {
-    try {
-      stockSecuriteMap = (await import("../assets/stock_securite.json")).default as Record<string, number>;
-    } catch {
-      stockSecuriteMap = {};
-    }
+    stockSecuriteMap = {};
     return stockSecuriteMap;
   }
   // If API is present, rely on backend data only (no fallback file)
