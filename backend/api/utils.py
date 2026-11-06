@@ -67,7 +67,7 @@ def ensure_parts_loaded():
                 # Ne jamais bloquer l'API si la resynchro échoue.
                 pass
         return
-    # Try to run inference; fallback to JSON assets
+    # Public demo must use the real model on synthetic inputs; never fall back to industrial JSON assets.\n    portfolio_demo = os.getenv("PORTFOLIO_DEMO") == "1"\n    # Try to run inference; fallback to JSON assets only in local non-demo mode
     try:
         preds_df = inference.run_inference()
         # enrich with part2 data for stocks/delais/prix
