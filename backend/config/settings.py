@@ -5,8 +5,8 @@ from corsheaders.defaults import default_headers
 BASE_DIR = Path(__file__).resolve().parent.parent
 
 SECRET_KEY = os.environ.get("DJANGO_SECRET_KEY", "dev-secret-key-change-me")
-DEBUG = True
-ALLOWED_HOSTS = ["*"]
+DEBUG = os.environ.get("DJANGO_DEBUG", "false").lower() == "true"
+ALLOWED_HOSTS = [".onrender.com", "localhost", "127.0.0.1"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -26,6 +26,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "api.portfolio_demo.PortfolioDemoMiddleware",
     "api.middleware.ApiAuthMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
 ]
@@ -66,7 +67,7 @@ STATIC_URL = "static/"
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # CORS
-CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_ALL_ORIGINS = False
 CORS_ALLOW_CREDENTIALS = True
 CORS_EXPOSE_HEADERS = ["Content-Disposition"]
 CORS_ALLOW_HEADERS = list(default_headers) + [
