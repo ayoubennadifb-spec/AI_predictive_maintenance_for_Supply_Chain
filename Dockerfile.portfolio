@@ -1,6 +1,6 @@
 # One Render Free web service: React build + Django + real sklearn inference.
 FROM node:20-alpine AS frontend
-WORKDIR /src/webapp/UI for forecasting2
+WORKDIR /frontend
 COPY ["webapp/UI for forecasting2/package.json", "webapp/UI for forecasting2/package-lock.json", "./"]
 RUN npm ci
 COPY ["webapp/UI for forecasting2/", "./"]
@@ -15,5 +15,5 @@ COPY backend/ /app/backend/
 COPY portfolio_seed.py /app/portfolio_seed.py
 COPY data/results/hist_gradient_boosting_model.pkl /app/data/results/hist_gradient_boosting_model.pkl
 COPY data/results/hist_gradient_boosting_model_meta.json /app/data/results/hist_gradient_boosting_model_meta.json
-COPY --from=frontend /src/webapp/UI\ for\ forecasting2/build /app/webapp/UI\ for\ forecasting2/build
+COPY --from=frontend ["/frontend/build", "/app/webapp/UI for forecasting2/build"]
 CMD ["sh", "-c", "cd /app/backend && python manage.py migrate --noinput && python /app/portfolio_seed.py && exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT:-10000} --workers 1 --threads 2 --timeout 120"]
