@@ -27,6 +27,11 @@ def load_model():
     meta_path = RESULTS_DIR / "hist_gradient_boosting_model_meta.json"
     if not model_path.exists():
         raise FileNotFoundError(f"Model file not found: {model_path}")
+    # Compatibility with models serialized when sklearn's Cython loss module
+    # was importable as the top-level '_loss' extension.
+    import sys
+    import sklearn._loss._loss as sklearn_loss
+    sys.modules.setdefault('_loss', sklearn_loss)
     bundle = joblib.load(model_path)
     model = bundle["model"]
     feature_cols = bundle["features"]
