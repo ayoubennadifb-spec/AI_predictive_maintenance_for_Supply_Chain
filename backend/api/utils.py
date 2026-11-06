@@ -32,6 +32,8 @@ def load_json(path: Path):
 def ensure_parts_loaded():
     global _predictions_synced
     if Part.objects.exists():
+        if os.getenv("PORTFOLIO_DEMO") == "1":
+            return
         # Auto-heal : si la DB a des prévisions incohérentes (ex: prévision_m1 != fichier
         # predictions_2025.json), on resynchronise une seule fois par processus.
         if not _predictions_synced:
@@ -108,7 +110,8 @@ def ensure_parts_loaded():
         Part.objects.bulk_create(bulk, ignore_conflicts=True)
         return
     except Exception:
-        pass
+        if os.getenv("PORTFOLIO_DEMO") == "1":
+            raise  # Never fall back to industrial/precomputed data in the public demo.
 
     preds = load_json(_path_predictions()) or []
     stock_map = load_json(_path_stock_secu()) or {}
