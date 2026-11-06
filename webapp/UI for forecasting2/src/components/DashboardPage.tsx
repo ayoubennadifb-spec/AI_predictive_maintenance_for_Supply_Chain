@@ -216,7 +216,13 @@ export function DashboardPage() {
   if (error) return <div className="p-6 text-red-600">{error}</div>;
 
   return (
-    <div className="space-y-6 page-transition">\n      <section className="portfolio-hero" aria-label="Présentation de la plateforme">\n        <div className="portfolio-hero-top">SUPPLY CHAIN / PREDICTIVE ANALYTICS</div>\n        <h2>Anticiper la demande. Optimiser chaque décision.</h2>\n        <p>Une vue unifiée des prévisions de pièces détachées, des risques de rupture et des priorités d’approvisionnement, alimentée par un modèle de machine learning.</p>\n        <div className="portfolio-hero-tags"><span>Modèle ML opérationnel</span><span>120 références de démonstration</span><span>Environnement de simulation</span></div>\n      </section>
+    <div className="space-y-6 page-transition">
+      <section className="portfolio-hero" aria-label="Présentation de la plateforme">
+        <div className="portfolio-hero-top">SUPPLY CHAIN / PREDICTIVE ANALYTICS</div>
+        <h2>Anticiper la demande. Optimiser chaque décision.</h2>
+        <p>Une vue unifiée des prévisions de pièces détachées, des risques de rupture et des priorités d’approvisionnement, alimentée par un modèle de machine learning.</p>
+        <div className="portfolio-hero-tags"><span>Modèle ML opérationnel</span><span>120 références de démonstration</span><span>Environnement de simulation</span></div>
+      </section>
       <PageHeader
         title="Tableau de bord principal"
         description="Vue d'ensemble des prévisions et besoins calculés"
