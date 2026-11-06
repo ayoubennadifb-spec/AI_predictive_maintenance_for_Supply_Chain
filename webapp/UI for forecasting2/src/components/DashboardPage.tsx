@@ -217,12 +217,6 @@ export function DashboardPage() {
 
   return (
     <div className="space-y-6 page-transition">
-      <section className="portfolio-hero" aria-label="Présentation de la plateforme">
-        <div className="portfolio-hero-top">SUPPLY CHAIN / PREDICTIVE ANALYTICS</div>
-        <h2>Anticiper la demande. Optimiser chaque décision.</h2>
-        <p>Une vue unifiée des prévisions de pièces détachées, des risques de rupture et des priorités d’approvisionnement, alimentée par un modèle de machine learning.</p>
-        <div className="portfolio-hero-tags"><span>Modèle ML opérationnel</span><span>120 références de démonstration</span><span>Environnement de simulation</span></div>
-      </section>
       <PageHeader
         title="Tableau de bord principal"
         description="Vue d'ensemble des prévisions et besoins calculés"
@@ -280,9 +274,9 @@ export function DashboardPage() {
         />
 
         <KPICard
-          title="Consommation enregistrée"
+          title="Stock total"
           value={stats.totalStock.toFixed(0)}
-          subtitle="Consommation cumulée enregistrée"
+          subtitle="Accouplements en inventaire"
           icon={Package}
           isLoading={isRefreshing}
         />
@@ -311,7 +305,7 @@ export function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="prevision"
-                stroke="#0d9488"
+                stroke="#6BA539"
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
                 name="Prévision ML (n_pm)"
@@ -319,7 +313,7 @@ export function DashboardPage() {
               <Line
                 type="monotone"
                 dataKey="consommation"
-                stroke="#6478b9"
+                stroke="#0B3D91"
                 strokeWidth={2.5}
                 dot={{ r: 3 }}
                 name="Consommation actuelle cumulée"
@@ -347,8 +341,8 @@ export function DashboardPage() {
                 }}
               />
               <Legend wrapperStyle={{ fontSize: "12px" }} iconType="circle" />
-              <Bar dataKey="stock" stackId="a" fill="#0d9488" name="En stock" />
-              <Bar dataKey="aCommander" stackId="a" fill="#f59e0b" name="À commander (NAC)" />
+              <Bar dataKey="stock" stackId="a" fill="#6BA539" name="En stock" />
+              <Bar dataKey="aCommander" stackId="a" fill="#DC2626" name="À commander (NAC)" />
             </BarChart>
           </ResponsiveContainer>
         </InteractiveChart>
