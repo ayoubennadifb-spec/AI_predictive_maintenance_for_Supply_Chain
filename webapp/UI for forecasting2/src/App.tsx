@@ -18,7 +18,7 @@ import { AuthProvider, useAuth } from './components/AuthContext';
 
 import { LayoutDashboard, TrendingUp, FileInput, Wallet, Menu, LogOut, AlertCircle, Shield } from 'lucide-react';
 
-import ocpLogo from 'figma:asset/ea0333669458322a030507607d5724be95c62222.png';
+import { Boxes } from 'lucide-react';
 
 function getRoleBadgeVariant(role: string): 'default' | 'secondary' | 'destructive' | 'outline' {
   switch (role) {
@@ -100,21 +100,21 @@ function AppContent() {
   }
 
   return (
-    <div className="min-h-screen bg-background pb-20 md:pb-0">
+    <div className="portfolio-app min-h-screen bg-background pb-20 md:pb-0">
       {/* Header */}
-      <header className="bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-elevation-2 backdrop-blur-sm bg-white/95">
+      <header className="portfolio-header bg-white border-b border-neutral-200 sticky top-0 z-20 shadow-elevation-2 backdrop-blur-sm bg-white/95">
         <div className="max-w-[1400px] mx-auto px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3 md:gap-4">
-              <img src={ocpLogo} alt="OCP Group" className="h-8 md:h-10 w-auto object-contain flex-shrink-0" />
+              <div className="portfolio-brand-icon"><Boxes className="w-6 h-6" strokeWidth={1.8} /></div>
               <div className="h-8 md:h-10 w-px bg-neutral-300 hidden sm:block" />
               <div className="min-w-0">
-                <h1 className="text-neutral-900 text-sm md:text-base truncate font-semibold">Système de Prévision</h1>
-                <p className="text-xs text-neutral-500 hidden sm:block">Accouplements &amp; Pièces détachées</p>
+                <div className="portfolio-brand-eyebrow">EFAIX / INTELLIGENCE INDUSTRIELLE</div><h1 className="text-neutral-900 text-sm md:text-base truncate font-semibold">Supply Intelligence</h1>
+                <p className="text-xs text-neutral-500 hidden sm:block">Prévision de la demande · Pièces détachées</p>
               </div>
             </div>
             <div className="flex items-center gap-2 md:gap-4">
-              <div className="text-right hidden md:block">
+              <span className="portfolio-demo-label hidden lg:inline-flex">Données synthétiques</span><div className="text-right hidden md:block">
                 <p className="text-small text-neutral-600">Connecté en tant que</p>
                 <div className="flex items-center gap-2 justify-end">
                   <p className="text-small font-medium text-neutral-900">{user.nom}</p>
@@ -168,7 +168,7 @@ function AppContent() {
       </header>
 
       {/* Main content */}
-      <main className="max-w-[1400px] mx-auto px-4 md:px-6 py-4 md:py-6">
+      <main className="portfolio-main max-w-[1400px] mx-auto px-4 md:px-6 py-4 md:py-6">
         {/* Quick search */}
         <div className="mb-6 hidden md:block animate-slide-in-top">
           <QuickSearch />
@@ -179,7 +179,7 @@ function AppContent() {
           <TabsList className="hidden md:flex w-full justify-start gap-2 bg-neutral-50/80 p-1.5 rounded-xl border border-neutral-200 shadow-sm mb-4">
             <TabsTrigger
               value="dashboard"
-              className="flex items-center gap-2 data-[state=active]:bg-[#6BA539] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
+              className="flex items-center gap-2 data-[state=active]:bg-[#123b4a] data-[state=active]:text-white data-[state=active]:shadow-md rounded-lg transition-all px-4 py-2.5"
             >
               <LayoutDashboard className="w-4 h-4" />
               <span className="text-small">Tableau de bord</span>
