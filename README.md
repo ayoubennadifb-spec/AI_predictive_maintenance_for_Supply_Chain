@@ -1,5 +1,7 @@
 # ML Consumption Forecasting
 
+**Live Demo:** https://spare-parts-demand-forecast.onrender.com
+
 ## Structure
 - `data/raw/` – fichiers Excel d’origine (part 2, part 3, PDR).
 - `data/processed/` – fichiers parquet intermédiaires (nettoyés, panel, etc.).
